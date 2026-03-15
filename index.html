@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>臺股 AI 分析 — K線&技術指標預測</title>
+  <meta name="description" content="台灣股票&ETF技術分析預測工具，結合K線型態識別、RSI、MACD、布林通道等指標進行智能分析。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Background particles -->
+  <div class="bg-particles" id="bgParticles"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">🇹🇼</div>
+      <div class="logo-text">
+        <span class="logo-main">臺股 AI</span>
+        <span class="logo-badge">分析</span>
+      </div>
+    </div>
+    <div class="header-sub">K線型態 ＋ 技術指標 多維評估</div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+
+    <!-- Search Section -->
+    <section class="search-section">
+      <div class="search-wrapper">
+        <div class="search-icon">🔍</div>
+        <input
+          type="text"
+          id="stockInput"
+          class="search-input"
+          placeholder="輸入台股代碼，如 2330.TW、0050.TW、2317.TW..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button id="analyzeBtn" class="analyze-btn">
+          <span class="btn-text">分析</span>
+          <span class="btn-icon">⚡</span>
+        </button>
+      </div>
+      <!-- Quick picks -->
+      <div class="quick-picks">
+        <span class="qp-label">個股：</span>
+        <button class="qp-btn" data-symbol="2330.TW">台積電</button>
+        <button class="qp-btn" data-symbol="2317.TW">鴻海</button>
+        <button class="qp-btn" data-symbol="2454.TW">聯發科</button>
+        <button class="qp-btn" data-symbol="2303.TW">聯電</button>
+        <button class="qp-btn" data-symbol="2412.TW">中華電</button>
+        <button class="qp-btn" data-symbol="2308.TW">台達電</button>
+      </div>
+      <div class="quick-picks" style="margin-top:8px">
+        <span class="qp-label">ETF：</span>
+        <button class="qp-btn etf" data-symbol="0050.TW">0050</button>
+        <button class="qp-btn etf" data-symbol="0056.TW">0056</button>
+        <button class="qp-btn etf" data-symbol="00878.TW">00878</button>
+        <button class="qp-btn etf" data-symbol="00881.TW">00881</button>
+        <button class="qp-btn etf" data-symbol="006208.TW">006208</button>
+        <button class="qp-btn etf" data-symbol="00919.TW">00919</button>
+      </div>
+    </section>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSection" class="loading-section hidden">
+      <div class="spinner-ring"></div>
+      <p class="loading-text">正在分析市場數據...</p>
+      <p class="loading-sub" id="loadingStatus">擷取歷史價格</p>
+    </div>
+
+    <!-- Error Box -->
+    <div id="errorBox" class="error-box hidden">
+      <span class="error-icon">⚠️</span>
+      <span id="errorMsg"></span>
+    </div>
+
+    <!-- Results Section -->
+    <div id="resultsSection" class="results-section hidden">
+
+      <!-- Stock Info Bar -->
+      <div class="stock-info-bar">
+        <div class="stock-identity">
+          <h2 class="stock-name" id="stockName">—</h2>
+          <span class="stock-symbol-tag" id="stockSymbolTag">—</span>
+        </div>
+        <div class="price-block">
+          <div class="current-price" id="currentPrice">—</div>
+          <div class="price-change" id="priceChange">—</div>
+        </div>
+      </div>
+
+      <!-- Prediction Card -->
+      <div class="prediction-card" id="predictionCard">
+        <div class="prediction-glow" id="predictionGlow"></div>
+        <div class="prediction-header">
+          <div class="pred-icon" id="predIcon">—</div>
+          <div class="pred-label">AI 預測訊號</div>
+        </div>
+        <div class="prediction-verdict" id="predictionVerdict">—</div>
+        <div class="prediction-desc" id="predictionDesc">—</div>
+        <div class="confidence-row">
+          <span class="conf-label">預測信心度</span>
+          <div class="confidence-bar-track">
+            <div class="confidence-bar-fill" id="confidenceBar"></div>
+          </div>
+          <span class="conf-value" id="confidenceValue">—%</span>
+        </div>
+      </div>
+
+      <!-- Chart Section -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">K 線圖</h3>
+          <div class="chart-controls">
+            <button class="chart-tab active" data-mode="candle">K線</button>
+            <button class="chart-tab" data-mode="line">折線</button>
+            <span class="chart-period">60 天</span>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="priceChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Price Targets Section -->
+      <div class="price-targets-card" id="priceTargetsCard">
+        <div class="pt-header">
+          <div class="pt-title-group">
+            <h3 class="pt-title">🎯 價格目標 &amp; 時間預估</h3>
+            <p class="pt-subtitle">基於 ATR 波動率、費波那契延伸、趨勢強度計算，僅供參考</p>
+          </div>
+          <div class="pt-badge" id="ptSentimentBadge">—</div>
+        </div>
+
+        <!-- Take Profit & Stop Loss -->
+        <div class="tp-sl-row">
+          <div class="tp-block">
+            <div class="tp-label">🟢 目標獲利價位</div>
+            <div class="tp-levels" id="tpLevels"></div>
+          </div>
+          <div class="divider-v"></div>
+          <div class="sl-block">
+            <div class="sl-label">🔴 止損參考價位</div>
+            <div class="sl-price" id="slPrice">—</div>
+            <div class="sl-desc" id="slDesc">—</div>
+          </div>
+        </div>
+
+        <!-- Time Projections -->
+        <div class="time-proj-title">📅 時間區間預估</div>
+        <div class="time-proj-grid">
+          <div class="time-proj-item" id="proj-1m">
+            <div class="proj-period">近 1 個月</div>
+            <div class="proj-range" id="range-1m">—</div>
+            <div class="proj-bar-wrap">
+              <div class="proj-bar-track">
+                <div class="proj-bar-current" id="bar-1m"></div>
+              </div>
+            </div>
+            <div class="proj-scenario" id="scenario-1m">—</div>
+          </div>
+          <div class="time-proj-item" id="proj-6m">
+            <div class="proj-period">近 6 個月</div>
+            <div class="proj-range" id="range-6m">—</div>
+            <div class="proj-bar-wrap">
+              <div class="proj-bar-track">
+                <div class="proj-bar-current" id="bar-6m"></div>
+              </div>
+            </div>
+            <div class="proj-scenario" id="scenario-6m">—</div>
+          </div>
+          <div class="time-proj-item" id="proj-1y">
+            <div class="proj-period">近 1 年</div>
+            <div class="proj-range" id="range-1y">—</div>
+            <div class="proj-bar-wrap">
+              <div class="proj-bar-track">
+                <div class="proj-bar-current" id="bar-1y"></div>
+              </div>
+            </div>
+            <div class="proj-scenario" id="scenario-1y">—</div>
+          </div>
+        </div>
+
+        <!-- Fibonacci Levels -->
+        <div class="fib-section">
+          <div class="fib-title">📐 費波那契關鍵價位</div>
+          <div class="fib-levels" id="fibLevels"></div>
+        </div>
+      </div>
+
+      <!-- Indicators Grid -->
+      <div class="indicators-grid">
+
+        <!-- RSI Card -->
+        <div class="indicator-card" id="card-rsi">
+          <div class="ind-header">
+            <span class="ind-name">RSI (14)</span>
+            <span class="ind-badge" id="badge-rsi">—</span>
+          </div>
+          <div class="ind-value" id="val-rsi">—</div>
+          <div class="ind-gauge">
+            <div class="gauge-track">
+              <div class="gauge-zone zone-low"></div>
+              <div class="gauge-zone zone-mid"></div>
+              <div class="gauge-zone zone-high"></div>
+            </div>
+            <div class="gauge-needle" id="needle-rsi"></div>
+            <div class="gauge-labels">
+              <span>0</span><span>30</span><span>70</span><span>100</span>
+            </div>
+          </div>
+          <p class="ind-desc" id="desc-rsi">—</p>
+        </div>
+
+        <!-- MACD Card -->
+        <div class="indicator-card" id="card-macd">
+          <div class="ind-header">
+            <span class="ind-name">MACD</span>
+            <span class="ind-badge" id="badge-macd">—</span>
+          </div>
+          <div class="ind-value" id="val-macd">—</div>
+          <div class="macd-bars" id="macdBars"></div>
+          <p class="ind-desc" id="desc-macd">—</p>
+        </div>
+
+        <!-- Moving Average Card -->
+        <div class="indicator-card" id="card-ma">
+          <div class="ind-header">
+            <span class="ind-name">移動平均線</span>
+            <span class="ind-badge" id="badge-ma">—</span>
+          </div>
+          <div class="ma-rows">
+            <div class="ma-row">
+              <span class="ma-label">MA5</span>
+              <span class="ma-val" id="ma5val">—</span>
+              <span class="ma-signal" id="ma5sig">—</span>
+            </div>
+            <div class="ma-row">
+              <span class="ma-label">MA20</span>
+              <span class="ma-val" id="ma20val">—</span>
+              <span class="ma-signal" id="ma20sig">—</span>
+            </div>
+            <div class="ma-row">
+              <span class="ma-label">MA60</span>
+              <span class="ma-val" id="ma60val">—</span>
+              <span class="ma-signal" id="ma60sig">—</span>
+            </div>
+          </div>
+          <p class="ind-desc" id="desc-ma">—</p>
+        </div>
+
+        <!-- Bollinger Bands Card -->
+        <div class="indicator-card" id="card-bb">
+          <div class="ind-header">
+            <span class="ind-name">布林通道</span>
+            <span class="ind-badge" id="badge-bb">—</span>
+          </div>
+          <div class="bb-visual" id="bbVisual">
+            <div class="bb-upper-label">上軌</div>
+            <div class="bb-band-outer">
+              <div class="bb-band-inner" id="bbBandInner">
+                <div class="bb-price-dot" id="bbPriceDot"></div>
+              </div>
+            </div>
+            <div class="bb-price-vals">
+              <span id="bbUpper">—</span>
+              <span id="bbMid">中軌</span>
+              <span id="bbLower">—</span>
+            </div>
+            <div class="bb-lower-label">下軌</div>
+          </div>
+          <p class="ind-desc" id="desc-bb">—</p>
+        </div>
+
+        <!-- Volume Card -->
+        <div class="indicator-card" id="card-vol">
+          <div class="ind-header">
+            <span class="ind-name">成交量分析</span>
+            <span class="ind-badge" id="badge-vol">—</span>
+          </div>
+          <div class="ind-value" id="val-vol">—</div>
+          <div class="vol-bars" id="volBars"></div>
+          <p class="ind-desc" id="desc-vol">—</p>
+        </div>
+
+        <!-- K-Line Pattern Card -->
+        <div class="indicator-card" id="card-kline">
+          <div class="ind-header">
+            <span class="ind-name">K 線型態</span>
+            <span class="ind-badge" id="badge-kline">—</span>
+          </div>
+          <div class="kline-patterns" id="klinePatterns"></div>
+          <p class="ind-desc" id="desc-kline">—</p>
+        </div>
+
+        <!-- Score Summary Card -->
+        <div class="indicator-card score-card" id="card-score">
+          <div class="ind-header">
+            <span class="ind-name">綜合評分</span>
+          </div>
+          <div class="score-dial-wrapper">
+            <svg class="score-dial" viewBox="0 0 120 70" id="scoreSvg">
+              <defs>
+                <linearGradient id="dialGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style="stop-color:#ef4444"/>
+                  <stop offset="50%" style="stop-color:#f59e0b"/>
+                  <stop offset="100%" style="stop-color:#22c55e"/>
+                </linearGradient>
+              </defs>
+              <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="#1e293b" stroke-width="10" stroke-linecap="round"/>
+              <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="url(#dialGrad)" stroke-width="10" stroke-linecap="round" opacity="0.3"/>
+              <path id="dialArc" d="M 10 60 A 50 50 0 0 1 60 10" fill="none" stroke="url(#dialGrad)" stroke-width="10" stroke-linecap="round"/>
+              <line id="dialNeedle" x1="60" y1="60" x2="60" y2="15" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="60" cy="60" r="4" fill="white"/>
+              <text id="dialScore" x="60" y="75" text-anchor="middle" fill="white" font-size="14" font-weight="700">—</text>
+            </svg>
+          </div>
+          <div class="score-breakdown" id="scoreBreakdown"></div>
+          <!-- News Card -->
+        <div class="indicator-card news-card" id="card-news">
+          <div class="ind-header">
+            <span class="ind-name">最新關鍵消息</span>
+            <span class="ind-badge" id="badge-news">—</span>
+          </div>
+          <div class="news-list" id="newsList">
+            <!-- News items will be injected here -->
+            <p class="loading-sub">擷取即時新聞中...</p>
+          </div>
+          <p class="ind-desc" id="desc-news">AI 正在分析新聞標題的情緒傾向...</p>
+        </div>
+
+      </div>
+
+      </div>
+
+      <!-- Disclaimer -->
+      <p class="disclaimer">
+        ⚠️ 本工具僅供學習研究，分析結果不構成投資建議。台股資料來源：Yahoo Finance。K線型態識別屬歷史統計，不保證未來表現，投資請謹慎評估風險。
+      </p>
+    </div>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
