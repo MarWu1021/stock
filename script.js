@@ -107,10 +107,16 @@ async function fetchWithProxy(targetUrl) {
     try {
       const finalUrl = proxyGen(targetUrl);
       const res = await fetch(finalUrl);
-      if (res.ok) return res;
+      if (res.ok) {
+        // Validation: Some proxies return 200 OK but with an HTML/Text error message (e.g., "Edge: Too Many Requests")
+        const clone = res.clone();
+        await clone.json(); // Throws if not valid JSON
+        return res;
+      }
       if (res.status === 403) console.warn(`Proxy 403: ${finalUrl}`);
     } catch (e) {
       lastError = e;
+      console.warn(`Proxy failed: ${proxyGen(targetUrl)} - ${e.message}`);
     }
   }
   throw lastError || new Error('所有代理伺服器均無法連線，請檢查網路或稍後再試。');
