@@ -264,7 +264,27 @@ function calcFibLevels(high, low) {
   };
 }
 
+// ===== FUNDAMENTAL DATA ENGINE =====
+async function fetchFundamentalData(symbol) {
+  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,defaultKeyStatistics,summaryDetail`;
+  try {
+    const res = await fetchWithProxy(url);
+    const json = await res.json();
+    const result = json?.quoteSummary?.result?.[0];
+    if (!result) return null;
+    return {
+      financialData: result.financialData || {},
+      defaultKeyStatistics: result.defaultKeyStatistics || {},
+      summaryDetail: result.summaryDetail || {}
+    };
+  } catch(e) {
+    console.warn("Fundamental fetch error:", e);
+    return null;
+  }
+}
+
 // ===== NEWS & SENTIMENT ENGINE =====
+
 async function fetchNews(symbol) {
   // Use query2 for news search as well
   const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}&newsCount=5`;
@@ -477,69 +497,122 @@ function predict(data) {
   });
   klineScore = Math.max(-3, Math.min(3, klineScore));
 
-  const totalScore =
-    rsiScore   * 1.8 +
-    macdScore  * 1.5 +
-    maScore    * 1.5 +
-    bbScore    * 1.2 +
-    volScore   * 0.8 +
-    stochScore * 0.7 +
-    momScore   * 0.8 +
-    klineScore * 1.5;
+  // Create 7-Factor Model (VC Weights)
+  const fund = data.fundamentals || {};
+  const fd = fund.financialData || {};
+  const ks = fund.defaultKeyStatistics || {};
+  const sd = fund.summaryDetail || {};
 
-  const normalizedScore = Math.max(-10, Math.min(10, totalScore));
-  const technicalScore = normalizedScore;
+  const safeVal = (obj, key) => obj && obj[key] !== undefined && obj[key] !== null ? (obj[key].raw ?? obj[key]) : null;
 
-  // News sentiment weight (if news available)
-  const newsSentiment = data.newsSentiment || { score: 0, news: [] };
-  const combinedScore = Math.max(-10, Math.min(10, technicalScore * 0.8 + newsSentiment.score * 0.2));
-  
-  const confidence = Math.min(95, 42 + Math.abs(combinedScore) * 3.8);
+  // 1. Momentum (動量) 15%
+  let scoreMom = 50;
+  if (mom3 > 2) scoreMom += 10; else if (mom3 < -2) scoreMom -= 10;
+  if (mom10 > 5) scoreMom += 15; else if (mom10 < -5) scoreMom -= 15;
+  if (rsiVal > 40 && rsiVal < 70) scoreMom += 10;
+  if (macdScore > 0) scoreMom += 15;
+  scoreMom = Math.max(0, Math.min(100, scoreMom));
 
-  // --- New Logic: Price Targets & Time Projections ---
+  // 2. Valuation (估值) 15%
+  let scoreVal = 50;
+  const pe = safeVal(sd, 'trailingPE') || safeVal(sd, 'forwardPE');
+  const pb = safeVal(ks, 'priceToBook');
+  const ps = safeVal(sd, 'priceToSalesTrailing12Months');
+  const divY = safeVal(sd, 'dividendYield');
+  if (pe) { if (pe < 15) scoreVal += 15; else if (pe > 30) scoreVal -= 15; }
+  if (pb) { if (pb < 1.5) scoreVal += 15; else if (pb > 3) scoreVal -= 15; }
+  if (divY) { if (divY > 0.04) scoreVal += 10; else if (divY < 0.01) scoreVal -= 5; }
+  scoreVal = Math.max(0, Math.min(100, scoreVal));
+
+  // 3. Quality (質量) 20%
+  let scoreQual = 50;
+  const roe = safeVal(fd, 'returnOnEquity');
+  const roa = safeVal(fd, 'returnOnAssets');
+  const opMargin = safeVal(fd, 'operatingMargins');
+  const de = safeVal(fd, 'debtToEquity');
+  if (roe) { if (roe > 0.15) scoreQual += 20; else if (roe < 0.05) scoreQual -= 20; }
+  if (roa) { if (roa > 0.05) scoreQual += 10; else if (roa < 0) scoreQual -= 10; }
+  if (opMargin) { if (opMargin > 0.1) scoreQual += 10; else if (opMargin < 0) scoreQual -= 10; }
+  if (de) { if (de < 50) scoreQual += 10; else if (de > 150) scoreQual -= 10; }
+  scoreQual = Math.max(0, Math.min(100, scoreQual));
+
+  // 4. Growth (成長) 20%
+  let scoreGro = 50;
+  const revGrowth = safeVal(fd, 'revenueGrowth');
+  const epsGrowth = safeVal(ks, 'earningsQuarterlyGrowth');
+  if (revGrowth) { if (revGrowth > 0.1) scoreGro += 20; else if (revGrowth < 0) scoreGro -= 20; }
+  if (epsGrowth) { if (epsGrowth > 0.1) scoreGro += 20; else if (epsGrowth < 0) scoreGro -= 20; }
+  scoreGro = Math.max(0, Math.min(100, scoreGro));
+
   const atr = calcATR(highs, lows, closes);
+  // 5. Volatility (波動性) 10%
+  let scoreVol = 50;
+  const beta = safeVal(ks, 'beta');
+  const atrRatio = atr / currentPrice;
+  if (beta) { if (beta < 1) scoreVol += 15; else if (beta > 1.5) scoreVol -= 15; }
+  if (atrRatio) { if (atrRatio < 0.02) scoreVol += 15; else if (atrRatio > 0.04) scoreVol -= 15; }
+  scoreVol = Math.max(0, Math.min(100, scoreVol));
+
+  const newsSentiment = data.newsSentiment || { score: 0, news: [] };
+  // 6. Sentiment (情緒) 10%
+  let scoreSent = 50;
+  const targetMean = safeVal(fd, 'targetMeanPrice');
+  const recMean = safeVal(fd, 'recommendationMean');
+  if (targetMean) { if (targetMean > currentPrice * 1.1) scoreSent += 15; else if (targetMean < currentPrice) scoreSent -= 15; }
+  if (recMean) { if (recMean < 2) scoreSent += 15; else if (recMean > 3) scoreSent -= 15; }
+  if (newsSentiment.score > 2) scoreSent += 10; else if (newsSentiment.score < -2) scoreSent -= 10;
+  scoreSent = Math.max(0, Math.min(100, scoreSent));
+
+  // 7. Macro (宏觀) 10%
+  let scoreMac = 50;
+  const high52 = safeVal(sd, 'fiftyTwoWeekHigh');
+  if (high52) {
+    const fromHigh = currentPrice / high52;
+    if (fromHigh > 0.9) scoreMac += 15; else if (fromHigh < 0.7) scoreMac -= 15;
+  }
+  scoreMac = Math.max(0, Math.min(100, scoreMac));
+
+  // Combined VC Setup
+  const finalScore = (
+    scoreMom * 0.15 +
+    scoreVal * 0.15 +
+    scoreQual * 0.20 +
+    scoreGro * 0.20 +
+    scoreVol * 0.10 +
+    scoreSent * 0.10 +
+    scoreMac * 0.10
+  );
+  
+  const confidence = Math.min(99, 40 + Math.abs(finalScore - 50));
+
+  let verdict, desc, icon, sentiment;
+  let tp1, tp2, sl;
+  
   const lookback = Math.min(60, n);
   const recentHigh = Math.max(...highs.slice(-lookback));
   const recentLow = Math.min(...lows.slice(-lookback));
   const fib = calcFibLevels(recentHigh, recentLow);
 
-  let verdict, desc, icon, sentiment;
-  let tp1, tp2, sl;
-
-  if (combinedScore >= 3) {
-    sentiment = 'bullish'; icon = '🚀';
-    verdict = '📈 看漲訊號';
-    desc = combinedScore >= 6
-      ? `多項指標一致看多，且消息面呈現正向。K線型態出現底部訊號，目前的 RSI ${rsiVal.toFixed(1)}，趨勢強勁。`
-      : `技術面與消息面偏多。RSI ${rsiVal.toFixed(1)} 未達超買，建議觀察均線支撐後布局。`;
-    
-    // Bullish targets
-    tp1 = currentPrice + atr * 2;
-    tp2 = currentPrice + atr * 4;
-    sl = currentPrice - atr * 1.5;
-    // Suggest Fib levels if they make sense
-    if (fib['1.272'] > currentPrice) tp1 = Math.max(tp1, fib['1.272']);
-    if (fib['1.618'] > tp1) tp2 = Math.max(tp2, fib['1.618']);
-  } else if (combinedScore <= -3) {
-    sentiment = 'bearish'; icon = '⚠️';
-    verdict = '📉 看跌訊號';
-    desc = combinedScore <= -6
-      ? `技術與消息面同步看空，K線出現反轉。RSI ${rsiVal.toFixed(1)}，建議注意支撐位並降低持倉。`
-      : `市場情緒與技術面偏弱。RSI ${rsiVal.toFixed(1)}，建議等待明確止跌訊號。`;
-    
-    // Bearish targets (Support levels)
-    tp1 = currentPrice - atr * 2;
-    tp2 = currentPrice - atr * 4;
-    sl = currentPrice + atr * 1.5;
-    if (fib['0.618'] < currentPrice) tp1 = Math.min(tp1, fib['0.618']);
-    if (fib['0.382'] < tp1) tp2 = Math.min(tp2, fib['0.382']);
+  if (finalScore >= 80) {
+    sentiment = 'bullish'; icon = '🔥'; verdict = 'STRONG BUY (強烈買進)';
+    desc = '7大因子綜合表現極佳，成長與質量亮眼，強烈建議布局。';
+    tp1 = currentPrice + atr * 3; tp2 = currentPrice + atr * 5; sl = currentPrice - atr * 1.5;
+  } else if (finalScore >= 60) {
+    sentiment = 'bullish'; icon = '🚀'; verdict = 'BUY (買進)';
+    desc = '整體基本面與技術面偏多，具備投資價值。';
+    tp1 = currentPrice + atr * 2; tp2 = currentPrice + atr * 4; sl = currentPrice - atr * 1.5;
+  } else if (finalScore >= 40) {
+    sentiment = 'neutral'; icon = '⚖️'; verdict = 'HOLD (持有 / 中立)';
+    desc = '多空因子抵銷，建議維持現有部位或等待進一步訊號。';
+    tp1 = currentPrice + atr * 2; tp2 = currentPrice - atr * 2; sl = currentPrice - atr * 3;
+  } else if (finalScore >= 20) {
+    sentiment = 'bearish'; icon = '⚠️'; verdict = 'SELL (賣出)';
+    desc = '各項指標轉弱，建議降低持股比例，注意風險。';
+    tp1 = currentPrice - atr * 2; tp2 = currentPrice - atr * 4; sl = currentPrice + atr * 1.5;
   } else {
-    sentiment = 'neutral'; icon = '🔍';
-    verdict = '⚖️ 中性觀望';
-    desc = `技術指標多空分歧（RSI ${rsiVal.toFixed(1)}），市場方向未明。建議等待更明確的突破或 K 線型態確認後再決策。`;
-    tp1 = currentPrice + atr * 2;
-    tp2 = currentPrice - atr * 2;
-    sl  = currentPrice - atr * 3;
+    sentiment = 'bearish'; icon = '💀'; verdict = 'STRONG SELL (強烈賣出)';
+    desc = '基本面與技術面全面惡化，強烈建議避開。';
+    tp1 = currentPrice - atr * 3; tp2 = currentPrice - atr * 5; sl = currentPrice + atr * 2;
   }
 
   // Time projections based on ATR and log volatility
@@ -554,8 +627,8 @@ function predict(data) {
 
   return {
     sentiment, verdict, desc, icon, confidence,
-    score: combinedScore,
-    technicalScore,
+    score: finalScore,
+    technicalScore: 0, /* unused now */
     newsSentiment,
     patterns,
     targets: { tp1, tp2, sl, fib },
@@ -564,6 +637,7 @@ function predict(data) {
       '6m': projectRange(120),
       '1y': projectRange(240)
     },
+    factorScores: { mom: scoreMom, val: scoreVal, qual: scoreQual, gro: scoreGro, vol: scoreVol, sent: scoreSent, mac: scoreMac },
     indicators: {
       rsi: rsiVal, rsiScore,
       macd: macdData, macdScore,
@@ -764,7 +838,7 @@ function renderKlinePatterns(container, patterns, badgeEl, descEl) {
 }
 
 function renderScoreDial(score) {
-  const pct = (score + 10) / 20;
+  const pct = score / 100;
   const angle = -Math.PI + pct * Math.PI;
   const cx = 60, cy = 60, r = 50;
   const nx = cx + r * Math.cos(angle), ny = cy + r * Math.sin(angle);
@@ -775,7 +849,7 @@ function renderScoreDial(score) {
   document.getElementById('dialArc').setAttribute('d', `M 10 60 A 50 50 0 ${largeArc} 1 ${endX.toFixed(2)} ${endY.toFixed(2)}`);
   document.getElementById('dialNeedle').setAttribute('x2', nx.toFixed(2));
   document.getElementById('dialNeedle').setAttribute('y2', ny.toFixed(2));
-  document.getElementById('dialScore').textContent = (score >= 0 ? '+' : '') + score.toFixed(1);
+  document.getElementById('dialScore').textContent = Math.round(score);
 }
 
 function fmt(n, d = 2) { return n != null ? n.toFixed(d) : '—'; }
@@ -906,22 +980,27 @@ function applyResults(data, prediction) {
 
   // Score dial
   renderScoreDial(prediction.score);
+
+  // 7 factors breakdown
+  const factors = prediction.factorScores;
   const breakdown = document.getElementById('scoreBreakdown');
   breakdown.innerHTML = '';
   [
-    { label: `RSI`, score: prediction.indicators.rsiScore },
-    { label: 'MACD', score: prediction.indicators.macdScore },
-    { label: '均線', score: prediction.indicators.maScore },
-    { label: '布林', score: prediction.indicators.bbScore },
-    { label: '量能', score: prediction.indicators.volScore },
-    { label: 'K線型態', score: prediction.indicators.klineScore },
-    { label: '動能', score: prediction.indicators.momScore },
-    { label: '消息情緒', score: prediction.newsSentiment.score / 2 },
+    { label: '🔥 動量 (Momentum)', score: factors.mom },
+    { label: '💰 估值 (Valuation)', score: factors.val },
+    { label: '💎 質量 (Quality)', score: factors.qual },
+    { label: '📈 成長 (Growth)', score: factors.gro },
+    { label: '⚖️ 波動性 (Volatility)', score: factors.vol },
+    { label: '🧠 情緒 (Sentiment)', score: factors.sent },
+    { label: '🌍 宏觀 (Macro)', score: factors.mac },
   ].forEach(f => {
     const el = document.createElement('div');
-    el.className = 'score-item';
-    const color = f.score > 0 ? '#22c55e' : f.score < 0 ? '#ef4444' : '#94a3b8';
-    el.innerHTML = `<div class="score-dot" style="background:${color}"></div><span>${f.label}: ${f.score > 0 ? '+' : ''}${Number(f.score).toFixed(1)}</span>`;
+    el.className = 'factor-bar-wrapper';
+    const color = f.score >= 80 ? '#22c55e' : f.score >= 60 ? '#84cc16' : f.score >= 40 ? '#facc15' : f.score >= 20 ? '#f97316' : '#ef4444';
+    el.innerHTML = `
+      <div class="factor-label"><span>${f.label}</span><span>${Math.round(f.score)}</span></div>
+      <div class="factor-track"><div class="factor-fill" style="width:${f.score}%; background:${color}"></div></div>
+    `;
     breakdown.appendChild(el);
   });
 
@@ -1032,6 +1111,11 @@ async function runAnalysis() {
 
   try {
     const data = await fetchStockData(symbol);
+    updateLoadingStatus('獲取即時新聞...');
+    updateLoadingStatus('獲取基本面數據...');
+    const fundData = await fetchFundamentalData(symbol);
+    data.fundamentals = fundData;
+
     updateLoadingStatus('獲取即時新聞...');
     const news = await fetchNews(symbol);
     data.newsSentiment = analyzeSentiment(news);
