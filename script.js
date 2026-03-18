@@ -96,6 +96,8 @@ document.addEventListener('click', e => {
 // ===== PROXY FETCH UTILITY (Multi-proxy fallback) =====
 async function fetchWithProxy(targetUrl) {
   const proxies = [
+    url => `/api/proxy?url=${encodeURIComponent(url)}`, // [Vercel] 專屬後台代理伺服器 (若部署在 Vercel 則會自動生效)
+    url => url, // 嘗試直接連線 (若使用者有安裝 Allow CORS 外掛，這行就會直接成功，不被 Yahoo 代理黑名單阻擋)
     url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
     url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
