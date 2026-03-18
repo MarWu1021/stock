@@ -1138,7 +1138,11 @@ async function runAnalysis() {
   } catch (err) {
     loadingSection.classList.add('hidden');
     errorBox.classList.remove('hidden');
-    errorMsg.textContent = err.message || '無法取得資料，請確認代碼後重試。';
+    let msg = err.message || '無法取得資料，請確認代碼後重試。';
+    if (msg.includes('Failed to fetch')) {
+      msg = '連線遭阻擋 (Failed to fetch)。可能是免費代理伺服器超載、遭 Yahoo 阻擋，或被您的「擋廣告外掛(AdBlock)」攔截。請稍後再試或暫時關閉外掛。';
+    }
+    errorMsg.textContent = msg;
     console.error(err);
   } finally {
     analyzeBtn.disabled = false;
