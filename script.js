@@ -557,8 +557,18 @@ function detectCandlePatterns(opens, closes, highs, lows) {
 }
 
 // ===== PREDICTION ENGINE =====
-function predict(data) {
-  const { closes, highs, lows, opens, volumes, currentPrice } = data;
+function predict(data, endIndex = -1) {
+  const { closes: allCloses, highs: allHighs, lows: allLows, opens: allOpens, volumes: allVolumes } = data;
+  const nFull = allCloses.length;
+  const L = endIndex === -1 ? nFull - 1 : endIndex;
+  
+  // Slice data for this specific point in time
+  const closes = allCloses.slice(0, L + 1);
+  const highs = allHighs.slice(0, L + 1);
+  const lows = allLows.slice(0, L + 1);
+  const opens = allOpens.slice(0, L + 1);
+  const volumes = allVolumes.slice(0, L + 1);
+  const currentPrice = closes[L];
   const n = closes.length;
 
   updateLoadingStatus('計算技術指標中...');
@@ -689,7 +699,6 @@ function predict(data) {
   }
   scoreMac = Math.max(0, Math.min(100, scoreMac));
 
-  // Combined VC Setup
   const finalScore = (
     scoreMom * 0.15 +
     scoreVal * 0.15 +
@@ -700,6 +709,7 @@ function predict(data) {
     scoreMac * 0.10
   );
   
+  const factorScores = { mom: scoreMom, val: scoreVal, qual: scoreQual, gro: scoreGro, vol: scoreVol, sent: scoreSent, mac: scoreMac };
   const confidence = Math.min(99, 40 + Math.abs(finalScore - 50));
 
   let verdict, desc, icon, sentiment;
@@ -710,27 +720,54 @@ function predict(data) {
   const recentLow = Math.min(...lows.slice(-lookback));
   const fib = calcFibLevels(recentHigh, recentLow);
 
-  if (finalScore >= 80) {
-    sentiment = 'bullish'; icon = '🔥'; verdict = 'STRONG BUY (強烈買進)';
-    desc = '7大因子綜合表現極佳，成長與質量亮眼，強烈建議布局。';
+  if (finalScore >= 85) {
+    sentiment = 'bullish'; icon = '🔥'; verdict = 'STRONG BUY (強力買進)'; verdictClass = 'v-strong-buy';
+    desc = '7大因子表現卓越，目前正處於極強趨勢，建議把握時機。';
     tp1 = currentPrice + atr * 3; tp2 = currentPrice + atr * 5; sl = currentPrice - atr * 1.5;
-  } else if (finalScore >= 60) {
-    sentiment = 'bullish'; icon = '🚀'; verdict = 'BUY (買進)';
-    desc = '整體基本面與技術面偏多，具備投資價值。';
+  } else if (finalScore >= 70) {
+    sentiment = 'bullish'; icon = '🚀'; verdict = 'BUY (偏多買進)'; verdictClass = 'v-buy';
+    desc = '各項指標協調配合良好，具備穩定的上行空間。';
     tp1 = currentPrice + atr * 2; tp2 = currentPrice + atr * 4; sl = currentPrice - atr * 1.5;
+  } else if (finalScore >= 60) {
+    sentiment = 'bullish'; icon = '📈'; verdict = 'BULLISH (盤整偏多)'; verdictClass = 'v-bullish';
+    desc = '多方勢力佔優但尚未進入主升段，適合波段佈局。';
+    tp1 = currentPrice + atr * 1.5; tp2 = currentPrice + atr * 3; sl = currentPrice - atr * 1.2;
   } else if (finalScore >= 40) {
-    sentiment = 'neutral'; icon = '⚖️'; verdict = 'HOLD (持有 / 中立)';
-    desc = '多空因子抵銷，建議維持現有部位或等待進一步訊號。';
+    sentiment = 'neutral'; icon = '⚖️'; verdict = 'HOLD (持有中立)'; verdictClass = 'v-hold';
+    desc = '多空力道抵銷，進入整理階段，建議觀望等待方向。';
     tp1 = currentPrice + atr * 2; tp2 = currentPrice - atr * 2; sl = currentPrice - atr * 3;
-  } else if (finalScore >= 20) {
-    sentiment = 'bearish'; icon = '⚠️'; verdict = 'SELL (賣出)';
-    desc = '各項指標轉弱，建議降低持股比例，注意風險。';
+  } else if (finalScore >= 30) {
+    sentiment = 'bearish'; icon = '☁️'; verdict = 'SLIGHTLY BEARISH (盤整偏空)'; verdictClass = 'v-sl-bear';
+    desc = '出現轉弱跡象，上方賣壓逐漸轉強，宜先行停利。';
+    tp1 = currentPrice - atr * 1.5; tp2 = currentPrice - atr * 3; sl = currentPrice + atr * 1.2;
+  } else if (finalScore >= 15) {
+    sentiment = 'bearish'; icon = '⚠️'; verdict = 'SELL (偏空賣出)'; verdictClass = 'v-sell';
+    desc = '技術面轉壞且基本面趨勢向下，注意資金安全性。';
     tp1 = currentPrice - atr * 2; tp2 = currentPrice - atr * 4; sl = currentPrice + atr * 1.5;
   } else {
-    sentiment = 'bearish'; icon = '💀'; verdict = 'STRONG SELL (強烈賣出)';
-    desc = '基本面與技術面全面惡化，強烈建議避開。';
+    sentiment = 'bearish'; icon = '💀'; verdict = 'STRONG SELL (強力賣出)'; verdictClass = 'v-strong-sell';
+    desc = '各項數據全面惡化，市場信心崩潰，強烈建議保守。';
     tp1 = currentPrice - atr * 3; tp2 = currentPrice - atr * 5; sl = currentPrice + atr * 2;
   }
+
+  // Dynamic Contextual Description
+  const factorLabels = { mom: '多頭動能', val: '價值優勢', qual: '獲利質量', gro: '成長潛力', vol: '低波動保護', sent: '市場情緒', mac: '大盤支撐' };
+  const sortedFactors = Object.entries(factorScores).sort((a,b) => b[1] - a[1]);
+  const bestF = sortedFactors[0];
+  if (finalScore >= 60) {
+    desc += ` 特別是目前的「${factorLabels[bestF[0]]}」表現最強，為股價提供支撐。`;
+  }
+
+  // Taiwan Specifics: 三關價
+  const prevH = highs[n-2] || highs[n-1], prevL = lows[n-2] || lows[n-1];
+  const twSpec = {
+    threePrice: {
+      up: prevL + (prevH - prevL) * 1.382,
+      mid: (prevH + prevL) / 2,
+      dn: prevH - (prevH - prevL) * 1.382
+    },
+    gap: (lows[n-1] > highs[n-2] * 1.005) ? 'up' : (highs[n-1] < lows[n-2] * 0.995) ? 'dn' : 'none'
+  };
 
   // Time projections based on ATR and log volatility
   const dailyVol = atr / currentPrice;
@@ -743,7 +780,7 @@ function predict(data) {
   };
 
   return {
-    sentiment, verdict, desc, icon, confidence,
+    sentiment, verdict, verdictClass, desc, icon, confidence,
     score: finalScore,
     technicalScore: 0, /* unused now */
     newsSentiment,
@@ -754,7 +791,8 @@ function predict(data) {
       '6m': projectRange(120),
       '1y': projectRange(240)
     },
-    factorScores: { mom: scoreMom, val: scoreVal, qual: scoreQual, gro: scoreGro, vol: scoreVol, sent: scoreSent, mac: scoreMac },
+    factorScores,
+    twSpec,
     indicators: {
       rsi: rsiVal, rsiScore,
       macd: macdData, macdScore,
@@ -1012,7 +1050,9 @@ function applyResults(data, prediction) {
   const card = document.getElementById('predictionCard');
   card.className = 'prediction-card ' + prediction.sentiment;
   document.getElementById('predIcon').textContent = prediction.icon;
-  document.getElementById('predictionVerdict').textContent = prediction.verdict;
+  const verdictEl = document.getElementById('predictionVerdict');
+  verdictEl.textContent = prediction.verdict;
+  verdictEl.className = 'prediction-verdict ' + prediction.verdictClass;
   document.getElementById('predictionDesc').textContent = prediction.desc;
   document.getElementById('confidenceValue').textContent = Math.round(prediction.confidence) + '%';
   const confBar = document.getElementById('confidenceBar');
@@ -1121,6 +1161,16 @@ function applyResults(data, prediction) {
     breakdown.appendChild(el);
   });
 
+  // Taiwan Specifics Rendering
+  const tw = prediction.twSpec;
+  document.getElementById('tw-up').textContent = fmt(tw.threePrice.up);
+  document.getElementById('tw-mid').textContent = fmt(tw.threePrice.mid);
+  document.getElementById('tw-dn').textContent = fmt(tw.threePrice.dn);
+  
+  const gapEl = document.getElementById('tw-gap');
+  gapEl.textContent = tw.gap === 'up' ? '↗️ 向上跳空 (強勢)' : tw.gap === 'dn' ? '↘️ 向下跳空 (弱勢)' : '➖ 無明顯缺口';
+  gapEl.className = 'tw-gap-result ' + (tw.gap === 'up' ? 'tw-gap-up' : tw.gap === 'dn' ? 'tw-gap-dn' : '');
+
   // Price Targets & Projections Rendering
   renderPriceTargets(prediction.targets, data.currentPrice, data.currency, prediction.sentiment);
   renderTimeProjections(prediction.projections, data.currentPrice, data.currency);
@@ -1213,6 +1263,54 @@ function renderTimeProjections(projs, currentPrice, currency) {
   });
 }
 
+// ===== BACKTEST ENGINE =====
+function runBacktest(data) {
+  const { closes } = data;
+  const n = closes.length;
+  const results = [];
+  const lookback = 40; // Test last 40 days
+  const holdPeriod = 10;
+  
+  // We need enough data to look back and look forward
+  for (let i = n - lookback - holdPeriod; i < n - holdPeriod; i++) {
+    const p = predict(data, i);
+    if (p.score >= 70) {
+      const entryPrice = closes[i];
+      const exitPrice = closes[i + holdPeriod];
+      const profit = (exitPrice - entryPrice) / entryPrice;
+      results.push({ profit });
+    }
+  }
+  
+  if (results.length === 0) return null;
+  const wins = results.filter(r => r.profit > 0).length;
+  const avgReturn = results.reduce((a, b) => a + b.profit, 0) / results.length;
+  return { winRate: (wins / results.length) * 100, avgReturn: avgReturn * 100, count: results.length };
+}
+
+function renderBacktest(res) {
+  const container = document.getElementById('backtestStats');
+  if (!res) {
+    container.classList.add('hidden');
+    return;
+  }
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="bt-item">
+      <div class="bt-label">歷史回測訊號數</div>
+      <div class="bt-value">${res.count} 次</div>
+    </div>
+    <div class="bt-item">
+      <div class="bt-label">做多勝率 (10日)</div>
+      <div class="bt-value bt-win-rate">${res.winRate.toFixed(1)}%</div>
+    </div>
+    <div class="bt-item">
+      <div class="bt-label">平均報酬率</div>
+      <div class="bt-value">${res.avgReturn > 0 ? '+' : ''}${res.avgReturn.toFixed(2)}%</div>
+    </div>
+  `;
+}
+
 // ===== MAIN ANALYSIS =====
 async function runAnalysis() {
   const raw = stockInput.value.trim();
@@ -1247,6 +1345,10 @@ async function runAnalysis() {
     resultsSection.classList.remove('hidden');
     updateStarBtn(data.symbol);
     applyResults(data, prediction);
+    
+    // Perform Backtest after main results
+    const btResults = runBacktest(data);
+    renderBacktest(btResults);
   } catch (err) {
     loadingSection.classList.add('hidden');
     errorBox.classList.remove('hidden');

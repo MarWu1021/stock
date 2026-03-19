@@ -434,6 +434,15 @@ body {
 .bearish .prediction-glow  { background: rgba(239, 68, 68, 0.15); }
 .neutral .prediction-glow  { background: rgba(245, 158, 11, 0.12); }
 
+/* Granular Verdict Colors */
+.prediction-verdict.v-strong-buy { background: linear-gradient(135deg, #10b981, #34d399); -webkit-background-clip: text; background-clip: text; }
+.prediction-verdict.v-buy { background: linear-gradient(135deg, #22c55e, #86efac); -webkit-background-clip: text; background-clip: text; }
+.prediction-verdict.v-bullish { background: linear-gradient(135deg, #84cc16, #bef264); -webkit-background-clip: text; background-clip: text; }
+.prediction-verdict.v-hold { background: linear-gradient(135deg, #f59e0b, #fde68a); -webkit-background-clip: text; background-clip: text; }
+.prediction-verdict.v-sl-bear { background: linear-gradient(135deg, #f97316, #fdba74); -webkit-background-clip: text; background-clip: text; }
+.prediction-verdict.v-sell { background: linear-gradient(135deg, #ef4444, #fca5a5); -webkit-background-clip: text; background-clip: text; }
+.prediction-verdict.v-strong-sell { background: linear-gradient(135deg, #b91c1c, #ef4444); -webkit-background-clip: text; background-clip: text; }
+
 .prediction-header {
   display: flex;
   align-items: center;
@@ -1022,3 +1031,37 @@ body {
   border-radius: 3px;
   transition: width 1s ease-in-out, background 0.5s;
 }
+
+/* Backtest Stats */
+.backtest-stats {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.bt-label { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+.bt-value { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+.bt-win-rate { color: var(--accent-green); }
+
+/* Taiwan Specific Card */
+.tw-spec-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 10px;
+}
+.tw-spec-item {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+.spec-label { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; }
+.three-price-list { display: flex; flex-direction: column; gap: 6px; }
+.tp-row { display: flex; justify-content: space-between; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+.tp-row span:first-child { color: var(--text-secondary); }
+.tw-gap-result { font-weight: 700; font-size: 16px; margin-top: 10px; }
+.tw-gap-up { color: var(--accent-green); }
+.tw-gap-dn { color: var(--accent-red); }

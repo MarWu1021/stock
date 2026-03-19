@@ -120,6 +120,9 @@
           </div>
           <span class="conf-value" id="confidenceValue">—%</span>
         </div>
+        <div id="backtestStats" class="backtest-stats hidden">
+          <!-- Backtest results injected here -->
+        </div>
       </div>
 
       <!-- Chart Section -->
@@ -204,10 +207,31 @@
         </div>
 
         <!-- Fibonacci Levels -->
-        <div class="fib-section">
-          <div class="fib-title">📐 費波那契關鍵價位</div>
           <div class="fib-levels" id="fibLevels"></div>
         </div>
+      </div>
+
+      <!-- Taiwan Specific Indicators Card -->
+      <div class="indicator-card" id="card-tw-spec">
+        <div class="ind-header">
+          <span class="ind-name">🇹🇼 台股特色指標</span>
+          <span class="ind-badge bull">在地化分析</span>
+        </div>
+        <div class="tw-spec-grid">
+          <div class="tw-spec-item">
+            <div class="spec-label">三關價 (昨日 H/L 計算)</div>
+            <div class="three-price-list">
+              <div class="tp-row"><span>上關 (壓力)</span><span id="tw-up">—</span></div>
+              <div class="tp-row"><span>中關 (強弱)</span><span id="tw-mid">—</span></div>
+              <div class="tp-row"><span>下關 (支撐)</span><span id="tw-dn">—</span></div>
+            </div>
+          </div>
+          <div class="tw-spec-item">
+            <div class="spec-label">缺口偵測</div>
+            <div id="tw-gap" class="tw-gap-result">—</div>
+          </div>
+        </div>
+        <p class="ind-desc" id="desc-tw-spec">結合台股特有的三關價與跳空缺口理論，精準捕捉短線支撐壓力位。</p>
       </div>
 
       <!-- Indicators Grid -->
