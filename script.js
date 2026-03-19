@@ -632,23 +632,23 @@ function predict(data, endIndex = -1) {
 
   const safeVal = (obj, key) => obj && obj[key] !== undefined && obj[key] !== null ? (obj[key].raw ?? obj[key]) : null;
 
-  // 1. Momentum (動量) 15%
+  // 1. Momentum (動量) 15% - Sharpened
   let scoreMom = 50;
-  if (mom3 > 2) scoreMom += 10; else if (mom3 < -2) scoreMom -= 10;
-  if (mom10 > 5) scoreMom += 15; else if (mom10 < -5) scoreMom -= 15;
-  if (rsiVal > 40 && rsiVal < 70) scoreMom += 10;
-  if (macdScore > 0) scoreMom += 15;
+  if (mom3 > 2) scoreMom += 15; else if (mom3 < -2) scoreMom -= 15;
+  if (mom10 > 5) scoreMom += 20; else if (mom10 < -5) scoreMom -= 20;
+  if (rsiVal > 40 && rsiVal < 60) scoreMom += 5;
+  if (macdScore > 0) scoreMom += 20; else if (macdScore < 0) scoreMom -= 15;
+  if (currentPrice > curMa20) scoreMom += 10; else scoreMom -= 10; 
   scoreMom = Math.max(0, Math.min(100, scoreMom));
 
-  // 2. Valuation (估值) 15%
+  // 2. Valuation (估值) 15% - Sharpened
   let scoreVal = 50;
   const pe = safeVal(sd, 'trailingPE') || safeVal(sd, 'forwardPE');
   const pb = safeVal(ks, 'priceToBook');
-  const ps = safeVal(sd, 'priceToSalesTrailing12Months');
   const divY = safeVal(sd, 'dividendYield');
-  if (pe) { if (pe < 15) scoreVal += 15; else if (pe > 30) scoreVal -= 15; }
-  if (pb) { if (pb < 1.5) scoreVal += 15; else if (pb > 3) scoreVal -= 15; }
-  if (divY) { if (divY > 0.04) scoreVal += 10; else if (divY < 0.01) scoreVal -= 5; }
+  if (pe) { if (pe < 12) scoreVal += 25; else if (pe < 18) scoreVal += 10; else if (pe > 35) scoreVal -= 25; }
+  if (pb) { if (pb < 1.2) scoreVal += 20; else if (pb > 4) scoreVal -= 25; }
+  if (divY) { if (divY > 0.05) scoreVal += 15; else if (divY < 0.01) scoreVal -= 8; }
   scoreVal = Math.max(0, Math.min(100, scoreVal));
 
   // 3. Quality (質量) 20%
@@ -657,18 +657,18 @@ function predict(data, endIndex = -1) {
   const roa = safeVal(fd, 'returnOnAssets');
   const opMargin = safeVal(fd, 'operatingMargins');
   const de = safeVal(fd, 'debtToEquity');
-  if (roe) { if (roe > 0.15) scoreQual += 20; else if (roe < 0.05) scoreQual -= 20; }
-  if (roa) { if (roa > 0.05) scoreQual += 10; else if (roa < 0) scoreQual -= 10; }
-  if (opMargin) { if (opMargin > 0.1) scoreQual += 10; else if (opMargin < 0) scoreQual -= 10; }
-  if (de) { if (de < 50) scoreQual += 10; else if (de > 150) scoreQual -= 10; }
+  if (roe) { if (roe > 0.18) scoreQual += 30; else if (roe < 0.03) scoreQual -= 30; }
+  if (roa) { if (roa > 0.08) scoreQual += 15; else if (roa < -0.02) scoreQual -= 15; }
+  if (opMargin) { if (opMargin > 0.15) scoreQual += 15; else if (opMargin < 0) scoreQual -= 20; }
+  if (de) { if (de < 40) scoreQual += 10; else if (de > 180) scoreQual -= 15; }
   scoreQual = Math.max(0, Math.min(100, scoreQual));
 
-  // 4. Growth (成長) 20%
+  // 4. Growth (成長) 20% - Sharpened
   let scoreGro = 50;
   const revGrowth = safeVal(fd, 'revenueGrowth');
   const epsGrowth = safeVal(ks, 'earningsQuarterlyGrowth');
-  if (revGrowth) { if (revGrowth > 0.1) scoreGro += 20; else if (revGrowth < 0) scoreGro -= 20; }
-  if (epsGrowth) { if (epsGrowth > 0.1) scoreGro += 20; else if (epsGrowth < 0) scoreGro -= 20; }
+  if (revGrowth) { if (revGrowth > 0.15) scoreGro += 25; else if (revGrowth < 0) scoreGro -= 25; }
+  if (epsGrowth) { if (epsGrowth > 0.2) scoreGro += 25; else if (epsGrowth < -0.1) scoreGro -= 30; }
   scoreGro = Math.max(0, Math.min(100, scoreGro));
 
   const atr = calcATR(highs, lows, closes);
@@ -685,9 +685,9 @@ function predict(data, endIndex = -1) {
   let scoreSent = 50;
   const targetMean = safeVal(fd, 'targetMeanPrice');
   const recMean = safeVal(fd, 'recommendationMean');
-  if (targetMean) { if (targetMean > currentPrice * 1.1) scoreSent += 15; else if (targetMean < currentPrice) scoreSent -= 15; }
-  if (recMean) { if (recMean < 2) scoreSent += 15; else if (recMean > 3) scoreSent -= 15; }
-  if (newsSentiment.score > 2) scoreSent += 10; else if (newsSentiment.score < -2) scoreSent -= 10;
+  if (targetMean) { if (targetMean > currentPrice * 1.15) scoreSent += 25; else if (targetMean < currentPrice) scoreSent -= 20; }
+  if (recMean) { if (recMean < 1.8) scoreSent += 20; else if (recMean > 3.2) scoreSent -= 20; }
+  if (newsSentiment.score > 3) scoreSent += 15; else if (newsSentiment.score < -3) scoreSent -= 15;
   scoreSent = Math.max(0, Math.min(100, scoreSent));
 
   // 7. Macro (宏觀) 10%
@@ -699,15 +699,28 @@ function predict(data, endIndex = -1) {
   }
   scoreMac = Math.max(0, Math.min(100, scoreMac));
 
-  const finalScore = (
-    scoreMom * 0.15 +
-    scoreVal * 0.15 +
-    scoreQual * 0.20 +
-    scoreGro * 0.20 +
-    scoreVol * 0.10 +
-    scoreSent * 0.10 +
-    scoreMac * 0.10
-  );
+  // Dynamic Weighting & Final Score Calculation
+  const baseWeights = { mom: 0.15, val: 0.15, qual: 0.20, gro: 0.20, vol: 0.10, sent: 0.10, mac: 0.10 };
+  let totalWeight = 0;
+  let weightedSum = 0;
+  
+  Object.keys(baseWeights).forEach(k => {
+    let w = baseWeights[k];
+    const s = factorScores[k];
+    // Extreme factor boost: if score is very high or very low, increase its impact
+    if (s > 80 || s < 20) w *= 1.8;
+    weightedSum += s * w;
+    totalWeight += w;
+  });
+
+  let rawScore = weightedSum / totalWeight;
+  
+  // Non-linear Stretching (Sharpening)
+  // Pull score away from 50 to avoid "Eternal Hold"
+  const delta = rawScore - 50;
+  const sharpenedDelta = Math.sign(delta) * Math.pow(Math.abs(delta) / 40, 0.85) * 45;
+  let finalScore = 50 + sharpenedDelta;
+  finalScore = Math.max(0, Math.min(100, finalScore));
   
   const factorScores = { mom: scoreMom, val: scoreVal, qual: scoreQual, gro: scoreGro, vol: scoreVol, sent: scoreSent, mac: scoreMac };
   const confidence = Math.min(99, 40 + Math.abs(finalScore - 50));
