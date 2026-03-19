@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   <!-- Background particles -->
@@ -64,6 +65,11 @@
         <button class="qp-btn etf" data-symbol="006208.TW">006208</button>
         <button class="qp-btn etf" data-symbol="00919.TW">00919</button>
       </div>
+      <!-- Watchlist Section -->
+      <div id="watchlistSection" class="quick-picks hidden" style="margin-top:8px">
+        <span class="qp-label">自選：</span>
+        <div id="watchlistContent" class="watchlist-content"></div>
+      </div>
     </section>
 
     <!-- Loading Spinner -->
@@ -85,7 +91,11 @@
       <!-- Stock Info Bar -->
       <div class="stock-info-bar">
         <div class="stock-identity">
-          <h2 class="stock-name" id="stockName">—</h2>
+          <div class="stock-title-row">
+            <h2 class="stock-name" id="stockName">—</h2>
+            <button id="starBtn" class="star-btn" title="加入自選">☆</button>
+            <button id="exportBtn" class="export-btn" title="匯出報告圖片">📸 匯出</button>
+          </div>
           <span class="stock-symbol-tag" id="stockSymbolTag">—</span>
         </div>
         <div class="price-block">
@@ -117,9 +127,16 @@
         <div class="chart-header">
           <h3 class="chart-title">K 線圖</h3>
           <div class="chart-controls">
-            <button class="chart-tab active" data-mode="candle">K線</button>
-            <button class="chart-tab" data-mode="line">折線</button>
-            <span class="chart-period">60 天</span>
+            <div class="control-group">
+              <button class="chart-tab timeframe active" data-range="3mo" data-interval="1d">日K</button>
+              <button class="chart-tab timeframe" data-range="1y" data-interval="1wk">週K</button>
+              <button class="chart-tab timeframe" data-range="5y" data-interval="1mo">月K</button>
+            </div>
+            <div class="divider-v" style="height: 16px; margin: 0 4px; opacity: 0.3;"></div>
+            <div class="control-group">
+              <button class="chart-tab active" data-mode="candle">K線</button>
+              <button class="chart-tab" data-mode="line">折線</button>
+            </div>
           </div>
         </div>
         <div class="chart-wrapper">

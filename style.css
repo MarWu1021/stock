@@ -317,6 +317,45 @@ body {
   color: var(--text-primary);
 }
 
+.stock-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.star-btn, .export-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.star-btn:hover, .export-btn:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  transform: translateY(-1px);
+}
+
+.star-btn.active {
+  color: #fbbf24;
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.export-btn {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(168, 85, 247, 0.1));
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .stock-symbol-tag {
   display: inline-block;
   background: rgba(99, 179, 237, 0.1);
@@ -874,7 +913,19 @@ body {
 .chart-controls {
   display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.watchlist-content {
+  display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .chart-tab {

@@ -22,6 +22,9 @@
 let currentChartMode = 'candle';
 let lastChartData = null;
 let lastSentiment = 'neutral';
+let currentRange = '3mo';
+let currentInterval = '1d';
+let watchlist = [];
 
 // ===== DOM REFS =====
 const stockInput    = document.getElementById('stockInput');
@@ -31,6 +34,10 @@ const loadingStatus   = document.getElementById('loadingStatus');
 const errorBox      = document.getElementById('errorBox');
 const errorMsg      = document.getElementById('errorMsg');
 const resultsSection  = document.getElementById('resultsSection');
+const starBtn       = document.getElementById('starBtn');
+const exportBtn     = document.getElementById('exportBtn');
+const watchlistSection = document.getElementById('watchlistSection');
+const watchlistContent = document.getElementById('watchlistContent');
 
 // ===== TAIWAN STOCK NAME MAP =====
 const TW_NAMES = {
@@ -80,16 +87,118 @@ document.querySelectorAll('.qp-btn').forEach(btn => {
 stockInput.addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
 analyzeBtn.addEventListener('click', runAnalysis);
 
-// Chart mode toggle
+// Chart mode & timeframe toggle
 document.addEventListener('click', e => {
   if (e.target.classList.contains('chart-tab')) {
-    document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+    const isTimeframe = e.target.classList.contains('timeframe');
+    
+    // Deactivate others in the same group or all if not grouped (safety)
+    const container = e.target.closest('.control-group') || document;
+    container.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
     e.target.classList.add('active');
-    currentChartMode = e.target.dataset.mode;
-    if (lastChartData) {
-      const canvas = document.getElementById('priceChart');
-      requestAnimationFrame(() => renderChart(canvas, lastChartData, lastSentiment, currentChartMode));
+
+    if (isTimeframe) {
+      currentRange = e.target.dataset.range;
+      currentInterval = e.target.dataset.interval;
+      runAnalysis(); // Re-fetch for new timeframe
+    } else {
+      currentChartMode = e.target.dataset.mode;
+      if (lastChartData) {
+        const canvas = document.getElementById('priceChart');
+        requestAnimationFrame(() => renderChart(canvas, lastChartData, lastSentiment, currentChartMode));
+      }
     }
+  }
+});
+
+// ===== WATCHLIST LOGIC =====
+function loadWatchlist() {
+  const stored = localStorage.getItem('tw_stock_watchlist');
+  watchlist = stored ? JSON.parse(stored) : [];
+  renderWatchlist();
+}
+
+function saveWatchlist() {
+  localStorage.setItem('tw_stock_watchlist', JSON.stringify(watchlist));
+  renderWatchlist();
+}
+
+function toggleWatchlist(symbol, name) {
+  const idx = watchlist.findIndex(item => item.symbol === symbol);
+  if (idx > -1) {
+    watchlist.splice(idx, 1);
+  } else {
+    watchlist.push({ symbol, name });
+  }
+  saveWatchlist();
+  updateStarBtn(symbol);
+}
+
+function renderWatchlist() {
+  if (watchlist.length === 0) {
+    watchlistSection.classList.add('hidden');
+    return;
+  }
+  watchlistSection.classList.remove('hidden');
+  watchlistContent.innerHTML = '';
+  watchlist.forEach(item => {
+    const btn = document.createElement('button');
+    btn.className = 'qp-btn';
+    btn.textContent = item.name.split(' ')[0]; // Just use first part of name
+    btn.title = `${item.name} (${item.symbol})`;
+    btn.addEventListener('click', () => {
+      stockInput.value = item.symbol.replace('.TW', '').replace('.TWO', '');
+      runAnalysis();
+    });
+    watchlistContent.appendChild(btn);
+  });
+}
+
+function updateStarBtn(symbol) {
+  const isWatched = watchlist.some(item => item.symbol === symbol);
+  if (isWatched) {
+    starBtn.classList.add('active');
+    starBtn.textContent = '★';
+  } else {
+    starBtn.classList.remove('active');
+    starBtn.textContent = '☆';
+  }
+}
+
+starBtn.addEventListener('click', () => {
+  if (lastChartData) {
+    toggleWatchlist(lastChartData.symbol, lastChartData.name);
+  }
+});
+
+// Initialize watchlist
+loadWatchlist();
+
+// ===== EXPORT LOGIC =====
+exportBtn.addEventListener('click', async () => {
+  if (!lastChartData) return;
+  
+  exportBtn.disabled = true;
+  exportBtn.textContent = '⌛ 處理中...';
+  
+  try {
+    const canvas = await html2canvas(resultsSection, {
+      backgroundColor: '#050d1a',
+      scale: 2, // Higher quality
+      useCORS: true,
+      logging: false
+    });
+    
+    const link = document.createElement('a');
+    link.download = `AI分析報告_${lastChartData.bareCode}_${new Date().toISOString().slice(0,10)}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } catch (err) {
+    console.error('Export failed:', err);
+    alert('匯出失敗，請稍後再試。');
+  } finally {
+    exportBtn.disabled = false;
+    exportBtn.textContent = '📸 匯出';
   }
 });
 
@@ -126,8 +235,8 @@ async function fetchWithProxy(targetUrl) {
 
 // ===== FETCH YAHOO FINANCE =====
 async function fetchStockData(symbol) {
-  const range = '3mo';
-  const interval = '1d';
+  const range = currentRange;
+  const interval = currentInterval;
   const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includeAdjustedClose=true`;
 
   updateLoadingStatus('連線至數據中心...');
@@ -1136,6 +1245,7 @@ async function runAnalysis() {
     const prediction = predict(data);
     loadingSection.classList.add('hidden');
     resultsSection.classList.remove('hidden');
+    updateStarBtn(data.symbol);
     applyResults(data, prediction);
   } catch (err) {
     loadingSection.classList.add('hidden');
