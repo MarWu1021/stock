@@ -721,32 +721,32 @@ function predict(data, endIndex = -1) {
   const fib = calcFibLevels(recentHigh, recentLow);
 
   if (finalScore >= 85) {
-    sentiment = 'bullish'; icon = '🔥'; verdict = 'STRONG BUY (強力買進)'; verdictClass = 'v-strong-buy';
-    desc = '7大因子表現卓越，目前正處於極強趨勢，建議把握時機。';
+    sentiment = 'bullish'; icon = '⚡'; verdict = '積極買進'; verdictClass = 'v-strong-buy';
+    desc = '【積極買進區】7大因子極度強勁，動能與趨勢完美契合。';
     tp1 = currentPrice + atr * 3; tp2 = currentPrice + atr * 5; sl = currentPrice - atr * 1.5;
   } else if (finalScore >= 70) {
-    sentiment = 'bullish'; icon = '🚀'; verdict = 'BUY (偏多買進)'; verdictClass = 'v-buy';
-    desc = '各項指標協調配合良好，具備穩定的上行空間。';
+    sentiment = 'bullish'; icon = '🚀'; verdict = '建議買進'; verdictClass = 'v-buy';
+    desc = '【買進區】指標協調良好，具備明確上行空間與基本面支撐。';
     tp1 = currentPrice + atr * 2; tp2 = currentPrice + atr * 4; sl = currentPrice - atr * 1.5;
   } else if (finalScore >= 60) {
-    sentiment = 'bullish'; icon = '📈'; verdict = 'BULLISH (盤整偏多)'; verdictClass = 'v-bullish';
-    desc = '多方勢力佔優但尚未進入主升段，適合波段佈局。';
+    sentiment = 'bullish'; icon = '📈'; verdict = '偏多持有'; verdictClass = 'v-bullish';
+    desc = '【有股續抱區】趨勢偏多但動能略微減速，建議持股續抱，不宜追高。';
     tp1 = currentPrice + atr * 1.5; tp2 = currentPrice + atr * 3; sl = currentPrice - atr * 1.2;
   } else if (finalScore >= 40) {
-    sentiment = 'neutral'; icon = '⚖️'; verdict = 'HOLD (持有中立)'; verdictClass = 'v-hold';
-    desc = '多空力道抵銷，進入整理階段，建議觀望等待方向。';
+    sentiment = 'neutral'; icon = '⚖️'; verdict = '中立觀望'; verdictClass = 'v-hold';
+    desc = '【中間區】多空因子抵銷，股價進入無方向整理。';
     tp1 = currentPrice + atr * 2; tp2 = currentPrice - atr * 2; sl = currentPrice - atr * 3;
   } else if (finalScore >= 30) {
-    sentiment = 'bearish'; icon = '☁️'; verdict = 'SLIGHTLY BEARISH (盤整偏空)'; verdictClass = 'v-sl-bear';
-    desc = '出現轉弱跡象，上方賣壓逐漸轉強，宜先行停利。';
+    sentiment = 'bearish'; icon = '☁️'; verdict = '偏弱觀察'; verdictClass = 'v-sl-bear';
+    desc = '【風險升高區】出現轉弱跡象，上方賣壓逐漸轉強，宜先行停利。';
     tp1 = currentPrice - atr * 1.5; tp2 = currentPrice - atr * 3; sl = currentPrice + atr * 1.2;
   } else if (finalScore >= 15) {
-    sentiment = 'bearish'; icon = '⚠️'; verdict = 'SELL (偏空賣出)'; verdictClass = 'v-sell';
-    desc = '技術面轉壞且基本面趨勢向下，注意資金安全性。';
+    sentiment = 'bearish'; icon = '⚠️'; verdict = '建議減碼'; verdictClass = 'v-sell';
+    desc = '【風險升高區】各項指標轉壞，建議大幅降低持股比例，規避風險。';
     tp1 = currentPrice - atr * 2; tp2 = currentPrice - atr * 4; sl = currentPrice + atr * 1.5;
   } else {
-    sentiment = 'bearish'; icon = '💀'; verdict = 'STRONG SELL (強力賣出)'; verdictClass = 'v-strong-sell';
-    desc = '各項數據全面惡化，市場信心崩潰，強烈建議保守。';
+    sentiment = 'bearish'; icon = '💀'; verdict = '建議賣出'; verdictClass = 'v-strong-sell';
+    desc = '【強烈警示區】數據全面惡化，市場信心崩潰，建議暫時避開。';
     tp1 = currentPrice - atr * 3; tp2 = currentPrice - atr * 5; sl = currentPrice + atr * 2;
   }
 
