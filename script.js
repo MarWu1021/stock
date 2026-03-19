@@ -699,6 +699,8 @@ function predict(data, endIndex = -1) {
   }
   scoreMac = Math.max(0, Math.min(100, scoreMac));
 
+  const factorScores = { mom: scoreMom, val: scoreVal, qual: scoreQual, gro: scoreGro, vol: scoreVol, sent: scoreSent, mac: scoreMac };
+
   // Dynamic Weighting & Final Score Calculation
   const baseWeights = { mom: 0.15, val: 0.15, qual: 0.20, gro: 0.20, vol: 0.10, sent: 0.10, mac: 0.10 };
   let totalWeight = 0;
@@ -716,13 +718,11 @@ function predict(data, endIndex = -1) {
   let rawScore = weightedSum / totalWeight;
   
   // Non-linear Stretching (Sharpening)
-  // Pull score away from 50 to avoid "Eternal Hold"
   const delta = rawScore - 50;
   const sharpenedDelta = Math.sign(delta) * Math.pow(Math.abs(delta) / 40, 0.85) * 45;
   let finalScore = 50 + sharpenedDelta;
   finalScore = Math.max(0, Math.min(100, finalScore));
   
-  const factorScores = { mom: scoreMom, val: scoreVal, qual: scoreQual, gro: scoreGro, vol: scoreVol, sent: scoreSent, mac: scoreMac };
   const confidence = Math.min(99, 40 + Math.abs(finalScore - 50));
 
   let verdict, desc, icon, sentiment;
