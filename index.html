@@ -211,6 +211,24 @@
         </div>
       </div>
 
+      <!-- Valuation Bands Card -->
+      <div class="chart-card" id="valuationBandsCard">
+        <div class="chart-header">
+          <div class="pt-title-group">
+            <h3 class="chart-title">🌊 估值河流圖 (P/E & P/B Bands)</h3>
+            <p class="pt-subtitle">將當前財務指標投射至歷史股價，評估相對價位高低</p>
+          </div>
+          <div class="control-group">
+            <button class="chart-tab active" data-vband="pe">本益比 (P/E)</button>
+            <button class="chart-tab" data-vband="pb">淨值比 (P/B)</button>
+          </div>
+        </div>
+        <div class="chart-wrapper" style="height: 250px;">
+          <canvas id="vBandChart"></canvas>
+        </div>
+        <div class="vband-info" id="vBandInfo"></div>
+      </div>
+
       <!-- Taiwan Specific Indicators Card -->
       <div class="indicator-card" id="card-tw-spec">
         <div class="ind-header">
@@ -375,6 +393,37 @@
             <p class="loading-sub">擷取即時新聞中...</p>
           </div>
           <p class="ind-desc" id="desc-news">AI 正在分析新聞標題的情緒傾向...</p>
+        </div>
+
+      </div>
+
+      <!-- Financial Dashboard -->
+      <div class="indicators-grid" id="financialDashboard">
+        
+        <!-- Revenue & EPS Trend Card -->
+        <div class="indicator-card financial-card" id="card-fin-trends">
+          <div class="ind-header">
+            <span class="ind-name">📊 營收與獲利趨勢 (Quarterly)</span>
+            <span class="ind-badge bull">財務成長</span>
+          </div>
+          <div class="fin-chart-container">
+            <canvas id="finTrendChart"></canvas>
+          </div>
+          <p class="ind-desc" id="desc-fin-trends">展示過去四個季度的營收 (Revenue) 與每股盈餘 (EPS) 變化。</p>
+        </div>
+
+        <!-- Dividend History Card -->
+        <div class="indicator-card financial-card" id="card-dividend">
+          <div class="ind-header">
+            <span class="ind-name">💰 股利發放分析</span>
+            <span class="ind-badge neut">存股參考</span>
+          </div>
+          <div class="div-stats-grid" id="divStatsGrid">
+            <!-- Dividend stats injected here -->
+          </div>
+          <div class="div-history-list" id="divHistoryList">
+            <!-- Dividend history items injected here -->
+          </div>
         </div>
 
       </div>

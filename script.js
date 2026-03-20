@@ -4,6 +4,25 @@
  *           RSI/MACD/MA/BB/Volume, auto .TW suffix, TW stock names
  */
 
+// ===== INSTITUTIONAL DATA =====
+function renderInstitutionalData(data) {
+  const fund = data.fundamentals || {};
+  const mh = fund.majorHoldersBreakdown || {};
+  
+  const instPct = mh.institutionsPercentHeld?.fmt || '—%';
+  const instCount = mh.institutionsCount?.fmt || mh.institutionsCount || '—';
+  
+  const pctEl = document.getElementById('instPercent');
+  const countEl = document.getElementById('instCount');
+  
+  if (pctEl) pctEl.textContent = instPct;
+  if (countEl) countEl.textContent = instCount;
+  
+  if (instPct === '—%') {
+    document.getElementById('desc-institution').textContent = '⚠️ 暫無此標的的機構持股公開數據。';
+  }
+}
+
 // ===== BACKGROUND PARTICLES =====
 (function createParticles() {
   const container = document.getElementById('bgParticles');
@@ -107,6 +126,16 @@ document.addEventListener('click', e => {
         const canvas = document.getElementById('priceChart');
         requestAnimationFrame(() => renderChart(canvas, lastChartData, lastSentiment, currentChartMode));
       }
+    }
+  }
+
+  // Valuation Band Toggle
+  if (e.target.dataset.vband) {
+    const parent = e.target.closest('.control-group');
+    parent.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    if (lastChartData && lastChartData.analysis) {
+      renderVBandChart(lastChartData, e.target.dataset.vband);
     }
   }
 });
@@ -383,7 +412,7 @@ function calcFibLevels(high, low) {
 
 // ===== FUNDAMENTAL DATA ENGINE =====
 async function fetchFundamentalData(symbol) {
-  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,defaultKeyStatistics,summaryDetail`;
+  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,defaultKeyStatistics,summaryDetail,earnings,majorHoldersBreakdown`;
   try {
     const res = await fetchWithProxy(url);
     const json = await res.json();
@@ -392,7 +421,9 @@ async function fetchFundamentalData(symbol) {
     return {
       financialData: result.financialData || {},
       defaultKeyStatistics: result.defaultKeyStatistics || {},
-      summaryDetail: result.summaryDetail || {}
+      summaryDetail: result.summaryDetail || {},
+      earnings: result.earnings || {},
+      majorHoldersBreakdown: result.majorHoldersBreakdown || {}
     };
   } catch(e) {
     console.warn("Fundamental fetch error:", e);
@@ -771,6 +802,13 @@ function predict(data, endIndex = -1) {
     desc += ` 特別是目前的「${factorLabels[bestF[0]]}」表現最強，為股價提供支撐。`;
   }
 
+  // == NEW: Backtest Results ==
+  let backtest = null;
+  if (endIndex === -1) { 
+    // Only run backtest on the "main" prediction
+    backtest = runBacktest(data, L);
+  }
+
   // Taiwan Specifics: 三關價
   const prevH = highs[n-2] || highs[n-1], prevL = lows[n-2] || lows[n-1];
   const twSpec = {
@@ -798,14 +836,12 @@ function predict(data, endIndex = -1) {
     technicalScore: 0, /* unused now */
     newsSentiment,
     patterns,
-    targets: { tp1, tp2, sl, fib },
-    projections: {
-      '1m': projectRange(20),
-      '6m': projectRange(120),
-      '1y': projectRange(240)
-    },
-    factorScores,
+    backtest,
     twSpec,
+    fib,
+    projections: { '1m': projectRange(20), '6m': projectRange(120), '1y': projectRange(240) },
+    targets: { tp1, tp2, sl },
+    factorScores,
     indicators: {
       rsi: rsiVal, rsiScore,
       macd: macdData, macdScore,
@@ -1067,10 +1103,33 @@ function applyResults(data, prediction) {
   verdictEl.textContent = prediction.verdict;
   verdictEl.className = 'prediction-verdict ' + prediction.verdictClass;
   document.getElementById('predictionDesc').textContent = prediction.desc;
-  document.getElementById('confidenceValue').textContent = Math.round(prediction.confidence) + '%';
+  const confidenceValue = document.getElementById('confidenceValue');
   const confBar = document.getElementById('confidenceBar');
-  confBar.style.width = '0%';
-  setTimeout(() => { confBar.style.width = prediction.confidence + '%'; }, 100);
+  confBar.style.width = `${prediction.confidence}%`;
+  confidenceValue.textContent = `${Math.round(prediction.confidence)}%`;
+
+  // Update Backtest Stats
+  const backtestStats = document.getElementById('backtestStats');
+  if (prediction.backtest) {
+    backtestStats.classList.remove('hidden');
+    const isGood = prediction.backtest.winRate >= 60;
+    backtestStats.innerHTML = `
+      <div class="bt-item">
+        <span class="bt-label">歷史勝率</span>
+        <span class="bt-val ${isGood ? 'up' : 'down'}">${prediction.backtest.winRate.toFixed(1)}%</span>
+      </div>
+      <div class="bt-item">
+        <span class="bt-label">平均報酬 (10d)</span>
+        <span class="bt-val ${prediction.backtest.avgReturn > 0 ? 'up' : 'down'}">${prediction.backtest.avgReturn > 0 ? '+' : ''}${prediction.backtest.avgReturn.toFixed(2)}%</span>
+      </div>
+      <div class="bt-item">
+        <span class="bt-label">訊號樣本數</span>
+        <span class="bt-val">${prediction.backtest.sampleSize} 次</span>
+      </div>
+    `;
+  } else {
+    backtestStats.classList.add('hidden');
+  }
 
   // Chart
   lastChartData = data;
@@ -1354,8 +1413,19 @@ async function runAnalysis() {
     await new Promise(r => setTimeout(r, 200));
 
     const prediction = predict(data);
-    loadingSection.classList.add('hidden');
+    loadingSection.classList.add('hidden');  // Final UI Reveal
     resultsSection.classList.remove('hidden');
+    resultsSection.scrollIntoView({ behavior: 'smooth' });
+
+    // Render Valuation Bands
+    renderVBandChart(data, 'pe');
+    
+    // Render Financial Dashboard
+    renderFinancialDashboard(data);
+    
+    // Render Institutional Data
+    renderInstitutionalData(data);
+    
     updateStarBtn(data.symbol);
     applyResults(data, prediction);
     

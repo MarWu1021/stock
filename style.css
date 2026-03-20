@@ -529,6 +529,153 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
+/* Backtest Stats Styles */
+.backtest-stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.bt-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bt-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bt-val {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+
+.bt-val.up { color: var(--accent-green); }
+.bt-val.down { color: var(--accent-red); }
+
+/* Valuation Bands Info */
+.vband-info {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.vband-stat {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.vband-stat span {
+  background: rgba(255,255,255,0.03);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+/* Financial Dashboard Styles */
+.financial-card {
+  min-height: 200px;
+}
+
+.fin-chart-container {
+  height: 120px;
+  margin: 15px 0;
+  position: relative;
+}
+
+.fin-chart-container canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.div-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.div-stat-item {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.div-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.div-stat-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Institutional Card Styles */
+.inst-glow-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+}
+
+.inst-percent {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--accent-blue);
+  text-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.inst-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.inst-stats-row {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.inst-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inst-stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.inst-stat-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 /* ===== CHART CARD ===== */
 .chart-card {
   background: var(--bg-card);
@@ -907,6 +1054,29 @@ body {
 }
 
 /* ===== RESPONSIVE ===== */
+/* ===== /* Custom Scrollbar for News and Lists */
+.news-list::-webkit-scrollbar { width: 4px; }
+.news-list::-webkit-scrollbar-track { background: transparent; }
+.news-list::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 10px; }
+
+/* Enhanced Card Glows */
+#valuationBandsCard {
+  border-left: 4px solid var(--accent-cyan);
+  background: linear-gradient(135deg, var(--bg-card) 0%, #112240 100%);
+}
+
+#financialDashboard .indicator-card {
+  border-bottom: 2px solid transparent;
+}
+
+#financialDashboard .indicator-card:hover {
+  border-bottom-color: var(--accent-blue);
+  box-shadow: 0 10px 30px -10px rgba(59, 130, 246, 0.3);
+}
+
+.fin-chart-container canvas {
+  filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.2));
+}
 /* ===== ETF QUICK PICK STYLE ===== */
 .qp-btn.etf {
   background: rgba(34, 197, 94, 0.1);
