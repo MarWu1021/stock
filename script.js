@@ -1244,7 +1244,7 @@ function applyResults(data, prediction) {
   gapEl.className = 'tw-gap-result ' + (tw.gap === 'up' ? 'tw-gap-up' : tw.gap === 'dn' ? 'tw-gap-dn' : '');
 
   // Price Targets & Projections Rendering
-  renderPriceTargets(prediction.targets, data.currentPrice, data.currency, prediction.sentiment);
+  renderPriceTargets(prediction.targets, prediction.fib, data.currentPrice, data.currency, prediction.sentiment);
   renderTimeProjections(prediction.projections, data.currentPrice, data.currency);
   renderNews(prediction.newsSentiment);
 }
@@ -1283,7 +1283,7 @@ function renderNews(newsData) {
   desc.textContent = s > 2 ? '近期消息面普遍看好，投資人信心積極。' : s < -2 ? '消息面充斥利空訊息，宜謹慎觀察賣盤壓力。' : '消息面情緒穩定，多空交戰均衡。';
 }
 
-function renderPriceTargets(targets, currentPrice, currency, sentiment) {
+function renderPriceTargets(targets, fib, currentPrice, currency, sentiment) {
   const badge = document.getElementById('ptSentimentBadge');
   badge.textContent = sentiment === 'bullish' ? '看漲環境' : sentiment === 'bearish' ? '看跌環境' : '盤整環境';
   badge.className = 'pt-badge ' + sentiment;
@@ -1311,9 +1311,314 @@ function renderPriceTargets(targets, currentPrice, currency, sentiment) {
   levels.forEach(lvl => {
     const item = document.createElement('div');
     item.className = 'fib-item';
-    item.innerHTML = `<span class="fib-name">${lvl}</span><span class="fib-val">${fmt(targets.fib[lvl])}</span>`;
+    item.innerHTML = `<span class="fib-name">${lvl}</span><span class="fib-val">${fmt(fib ? fib[lvl] : null)}</span>`;
     fibBox.appendChild(item);
   });
+}
+
+// ===== VALUATION BAND CHART =====
+function renderVBandChart(data, band) {
+  const canvas = document.getElementById('vBandChart');
+  const infoEl = document.getElementById('vBandInfo');
+  if (!canvas) return;
+
+  const fund = data.fundamentals || {};
+  const ks = fund.defaultKeyStatistics || {};
+  const sd = fund.summaryDetail || {};
+  const fd = fund.financialData || {};
+
+  const safeVal = (obj, key) => obj && obj[key] != null ? (obj[key].raw ?? obj[key]) : null;
+
+  const closes = data.closes;
+  const dates  = data.dates;
+  const count  = Math.min(60, closes.length);
+  const rc = closes.slice(-count);
+  const rd = dates.slice(-count);
+
+  // --- Determine band metric ---
+  let ratio = null;
+  let bandLabel = '';
+  let bandColor = '';
+  let infoText   = '';
+
+  if (band === 'pe') {
+    ratio = safeVal(sd, 'trailingPE') || safeVal(sd, 'forwardPE');
+    bandLabel = 'P/E 河流帶';
+    bandColor = '#a855f7';
+    if (ratio) {
+      const cheap = ratio < 12 ? '⬇️ 低估（P/E < 12）' : ratio < 20 ? '✅ 合理（P/E 12–20）' : ratio < 35 ? '⚠️ 稍貴（P/E 20–35）' : '🔴 高估（P/E > 35）';
+      infoText = `當前 P/E：${ratio.toFixed(1)}　評估：${cheap}`;
+    } else {
+      infoText = '⚠️ 本益比數據不可用（ETF 或無獲利）';
+    }
+  } else {
+    ratio = safeVal(ks, 'priceToBook');
+    bandLabel = 'P/B 河流帶';
+    bandColor = '#06b6d4';
+    if (ratio) {
+      const cheap = ratio < 1 ? '⬇️ 低於淨值（P/B < 1）' : ratio < 2 ? '✅ 合理（P/B 1–2）' : ratio < 4 ? '⚠️ 偏高（P/B 2–4）' : '🔴 高估（P/B > 4）';
+      infoText = `當前 P/B：${ratio.toFixed(2)}　評估：${cheap}`;
+    } else {
+      infoText = '⚠️ 淨值比數據不可用';
+    }
+  }
+
+  if (infoEl) infoEl.textContent = infoText;
+
+  // --- Canvas setup ---
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+
+  const padL = 60, padR = 14, padT = 20, padB = 32;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const minV = Math.min(...rc) * 0.97;
+  const maxV = Math.max(...rc) * 1.03;
+  const xOf = i => padL + (i + 0.5) / count * plotW;
+  const yOf = v => padT + (1 - (v - minV) / (maxV - minV)) * plotH;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  for (let g = 0; g <= 4; g++) {
+    const y = padT + (g / 4) * plotH;
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    const val = maxV - (g / 4) * (maxV - minV);
+    ctx.fillStyle = '#475569';
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(1), padL - 4, y + 4);
+  }
+
+  // Draw valuation bands if ratio available
+  if (ratio) {
+    // Compute implied EPS/BV per share from current price
+    const currentPrice = data.currentPrice;
+    const perShare = currentPrice / ratio; // EPS or BV
+
+    // Draw coloured band zones based on typical multiple ranges
+    const multiBands = band === 'pe'
+      ? [{ lo: 8,  hi: 12,  col: 'rgba(34,197,94,0.12)',  lbl: '8x' },
+         { lo: 12, hi: 20,  col: 'rgba(251,191,36,0.10)', lbl: '12x' },
+         { lo: 20, hi: 35,  col: 'rgba(249,115,22,0.10)', lbl: '20x' },
+         { lo: 35, hi: 60,  col: 'rgba(239,68,68,0.12)',  lbl: '35x' }]
+      : [{ lo: 0.5, hi: 1,  col: 'rgba(34,197,94,0.12)',  lbl: '0.5x' },
+         { lo: 1,  hi: 2,   col: 'rgba(251,191,36,0.10)', lbl: '1x' },
+         { lo: 2,  hi: 4,   col: 'rgba(249,115,22,0.10)', lbl: '2x' },
+         { lo: 4,  hi: 8,   col: 'rgba(239,68,68,0.12)',  lbl: '4x' }];
+
+    multiBands.forEach(({ lo, hi, col, lbl }) => {
+      const priceLo = perShare * lo;
+      const priceHi = perShare * hi;
+      const yTop = yOf(Math.min(priceHi, maxV * 1.05));
+      const yBot = yOf(Math.max(priceLo, minV * 0.95));
+      if (yBot > yTop) {
+        ctx.fillStyle = col;
+        ctx.fillRect(padL, yTop, plotW, yBot - yTop);
+        // Band label
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.font = '9px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        if (yBot > padT && yTop < padT + plotH) {
+          ctx.fillText(lbl, padL + 4, Math.max(padT + 10, Math.min(yBot - 2, padT + plotH - 2)));
+        }
+      }
+    });
+
+    // Draw band line for current ratio
+    const bandPriceLine = currentPrice; // already at current ratio
+    const yLine = yOf(bandPriceLine);
+    ctx.strokeStyle = bandColor;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(padL, yLine); ctx.lineTo(W - padR, yLine); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = bandColor;
+    ctx.font = '9px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${bandLabel} ${ratio.toFixed(1)}x`, padL + 4, yLine - 4);
+  }
+
+  // Price line
+  const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+  grad.addColorStop(0, bandColor + '33');
+  grad.addColorStop(1, bandColor + '00');
+
+  ctx.beginPath();
+  rc.forEach((v, i) => {
+    const x = xOf(i), y = yOf(v);
+    if (i === 0) ctx.moveTo(x, y);
+    else {
+      const px = xOf(i - 1), py = yOf(rc[i - 1]);
+      ctx.bezierCurveTo((px + x) / 2, py, (px + x) / 2, y, x, y);
+    }
+  });
+  ctx.lineTo(xOf(count - 1), padT + plotH);
+  ctx.lineTo(xOf(0), padT + plotH);
+  ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath();
+  rc.forEach((v, i) => {
+    const x = xOf(i), y = yOf(v);
+    if (i === 0) ctx.moveTo(x, y);
+    else {
+      const px = xOf(i - 1), py = yOf(rc[i - 1]);
+      ctx.bezierCurveTo((px + x) / 2, py, (px + x) / 2, y, x, y);
+    }
+  });
+  ctx.strokeStyle = bandColor; ctx.lineWidth = 2; ctx.stroke();
+
+  // Date labels
+  ctx.font = '9px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  const step = Math.ceil(count / 6);
+  for (let i = 0; i < rd.length; i += step) {
+    const d = rd[i];
+    ctx.fillStyle = '#475569';
+    ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}`, xOf(i), H - 10);
+  }
+}
+
+// ===== FINANCIAL DASHBOARD =====
+function renderFinancialDashboard(data) {
+  const fund = data.fundamentals || {};
+  const earnings = fund.earnings || {};
+  const sd = fund.summaryDetail || {};
+  const fd = fund.financialData || {};
+
+  const safeVal = (obj, key) => obj && obj[key] != null ? (obj[key].raw ?? obj[key]) : null;
+
+  // --- Revenue & EPS Trend Chart ---
+  const canvas = document.getElementById('finTrendChart');
+  const descEl = document.getElementById('desc-fin-trends');
+  const quarterly = earnings.earningsChart?.quarterly || [];
+
+  if (canvas && quarterly.length > 0) {
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width  = rect.width  * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    const labels = quarterly.map(q => q.date || '');
+    const actuals  = quarterly.map(q => q.actual?.raw  ?? 0);
+    const estimates = quarterly.map(q => q.estimate?.raw ?? 0);
+    const n = labels.length;
+
+    const padL = 40, padR = 10, padT = 16, padB = 28;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    const allVals = [...actuals, ...estimates].filter(v => v !== 0);
+    const minV = Math.min(...allVals, 0);
+    const maxV = Math.max(...allVals, 0.01);
+    const yOf = v => padT + (1 - (v - minV) / (maxV - minV)) * plotH;
+    const xOf = i => padL + (i + 0.5) / n * plotW;
+    const barW = (plotW / n) * 0.35;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Zero line
+    const y0 = yOf(0);
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(W - padR, y0); ctx.stroke();
+
+    // EPS bars (actual vs estimate)
+    actuals.forEach((v, i) => {
+      const x = xOf(i);
+      const color = v >= 0 ? 'rgba(34,197,94,0.8)' : 'rgba(239,68,68,0.8)';
+      const yTop = Math.min(yOf(v), y0);
+      const yBot = Math.max(yOf(v), y0);
+      ctx.fillStyle = color;
+      ctx.fillRect(x - barW - 1, yTop, barW, yBot - yTop);
+
+      const est = estimates[i];
+      const yEstTop = Math.min(yOf(est), y0);
+      const yEstBot = Math.max(yOf(est), y0);
+      ctx.fillStyle = 'rgba(148,163,184,0.4)';
+      ctx.fillRect(x + 1, yEstTop, barW, yEstBot - yEstTop);
+
+      // Date label
+      ctx.fillStyle = '#475569';
+      ctx.font = '9px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(labels[i], x, H - 8);
+    });
+
+    // Legend
+    ctx.font = '9px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(34,197,94,0.9)';
+    ctx.fillText('■ 實際 EPS', padL + 2, padT + 12);
+    ctx.fillStyle = 'rgba(148,163,184,0.8)';
+    ctx.fillText('■ 預估 EPS', padL + 72, padT + 12);
+
+    if (descEl) {
+      const lastQ = quarterly[quarterly.length - 1];
+      const beat = lastQ?.actual?.raw > lastQ?.estimate?.raw;
+      descEl.textContent = `最近一季 EPS：實際 ${lastQ?.actual?.fmt || '—'} vs 預估 ${lastQ?.estimate?.fmt || '—'}。${beat ? '✅ 優於預期，財報強勁。' : '⚠️ 未達預期，留意獲利品質。'}`;
+    }
+  } else if (canvas && descEl) {
+    // No earnings data
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width; canvas.height = rect.height;
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.fillStyle = '#475569';
+    ctx.font = '13px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('暫無季度 EPS 數據（可能為 ETF 或無盈餘）', rect.width / 2, rect.height / 2);
+    if (descEl) descEl.textContent = '此標的目前無季度獲利數據可供顯示。';
+  }
+
+  // --- Dividend Dashboard ---
+  const divYield  = safeVal(sd, 'dividendYield');
+  const divRate   = safeVal(sd, 'dividendRate');
+  const payRatio  = safeVal(sd, 'payoutRatio');
+  const exDate    = safeVal(sd, 'exDividendDate');
+
+  const statsGrid = document.getElementById('divStatsGrid');
+  if (statsGrid) {
+    const formatPct = v => v != null ? (v * 100).toFixed(2) + '%' : '—';
+    const formatDate = v => v ? new Date(v * 1000).toLocaleDateString('zh-TW') : '—';
+    statsGrid.innerHTML = [
+      { label: '殖利率', value: formatPct(divYield), highlight: divYield > 0.04 },
+      { label: '每股股利', value: divRate ? `NT$${divRate.toFixed(2)}` : '—', highlight: false },
+      { label: '配息率', value: formatPct(payRatio), highlight: false },
+      { label: '除息日', value: formatDate(exDate), highlight: false },
+    ].map(s => `
+      <div class="div-stat-item">
+        <div class="div-stat-label">${s.label}</div>
+        <div class="div-stat-val${s.highlight ? ' up' : ''}">${s.value}</div>
+      </div>
+    `).join('');
+  }
+
+  const histList = document.getElementById('divHistoryList');
+  if (histList) {
+    if (!divRate && !divYield) {
+      histList.innerHTML = '<p class="loading-sub">⚠️ 此標的目前無股利數據（可能為成長股或 ETF 另有計算規則）</p>';
+    } else {
+      const yieldClass = divYield > 0.05 ? 'up' : divYield > 0.02 ? '' : 'down';
+      histList.innerHTML = `
+        <div class="news-item" style="padding:10px 12px;">
+          <div class="news-item-title">年化殖利率 <span class="${yieldClass}">${divYield ? (divYield * 100).toFixed(2) + '%' : '—'}</span>，每年配息約 <strong>${divRate ? 'NT$' + divRate.toFixed(2) : '—'}</strong> 元/股</div>
+          <div class="news-item-meta" style="margin-top:4px;">${divYield > 0.04 ? '✅ 高息股，適合存股族' : divYield > 0.02 ? '📊 股利普通，須關注成長性' : '📉 配息偏低，以資本利得為主'}</div>
+        </div>
+      `;
+    }
+  }
 }
 
 function renderTimeProjections(projs, currentPrice, currency) {
