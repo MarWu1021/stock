@@ -450,6 +450,29 @@ body {
   margin-bottom: 12px;
 }
 
+.pred-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pred-personality {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 99px;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 10px rgba(6,182,212,0.15);
+}
+
+.bullish .pred-personality { color: #86efac; border-color: rgba(34,197,94,0.3); }
+.bearish .pred-personality { color: #fca5a5; border-color: rgba(239,68,68,0.3); }
+
 .pred-icon { font-size: 36px; animation: bounce-icon 2s ease-in-out infinite; }
 
 @keyframes bounce-icon {
@@ -521,13 +544,26 @@ body {
 .neutral .confidence-bar-fill { background: linear-gradient(90deg, #f59e0b, #fde68a); }
 
 .conf-value {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
-  min-width: 38px;
+  min-width: 45px;
   text-align: right;
   font-family: 'JetBrains Mono', monospace;
 }
+
+.calibration-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  font-size: 11px;
+}
+
+.cal-label { color: var(--text-muted); }
+.cal-value { color: var(--accent-cyan); font-weight: 700; font-family: 'JetBrains Mono', monospace; }
 
 /* Backtest Stats Styles */
 .backtest-stats {
@@ -594,10 +630,89 @@ body {
   position: relative;
 }
 
-.fin-chart-container canvas {
-  width: 100%;
-  height: 100%;
+/* Target Price Extensions */
+.pt-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
+
+.risk-reward-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.risk-reward-badge.good { background: rgba(34,197,94,0.2); color: #86efac; }
+.risk-reward-badge.ok { background: rgba(245,158,11,0.2); color: #fde68a; }
+.risk-reward-badge.poor { background: rgba(239,68,68,0.2); color: #fca5a5; }
+
+.cost-input-group {
+  margin-left: auto;
+  margin-right: 15px;
+}
+
+.cost-input {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+  width: 120px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.cost-input:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(6,182,212,0.2);
+}
+
+.pl-calculator {
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 15px;
+  margin: 15px 0;
+  border: 1px solid rgba(255,255,255,0.05);
+  animation: fadeIn 0.4s ease;
+}
+
+.pl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  margin-bottom: 12px;
+}
+
+.pl-label { font-size: 13px; color: var(--text-secondary); }
+.pl-value { font-size: 24px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+.pl-value.up { color: var(--accent-green); text-shadow: 0 0 15px rgba(34,197,94,0.3); }
+.pl-value.down { color: var(--accent-red); text-shadow: 0 0 15px rgba(239,68,68,0.3); }
+
+.pl-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.pl-mini-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.m-label { font-size: 11px; color: var(--text-muted); }
+.m-value { font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.m-value.up { color: var(--accent-green); }
+.m-value.down { color: var(--accent-red); }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
 .div-stats-grid {
   display: grid;
@@ -1014,12 +1129,36 @@ body {
   transform: translateX(4px);
 }
 
+.news-item-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.news-category-tag {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.cat-fin { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+.cat-major { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+.cat-market { background: rgba(6,182,212,0.15); color: #67e8f9; border: 1px solid rgba(6,182,212,0.3); }
+.cat-tech { background: rgba(168,85,247,0.15); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.3); }
+.cat-gen { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+
 .news-item-title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-primary);
-  line-height: 1.4;
+  line-height: 1.5;
+  transition: color 0.2s;
 }
+
+.news-item:hover .news-item-title { color: var(--accent-cyan); }
 
 .news-item-meta {
   display: flex;
@@ -1179,6 +1318,118 @@ body {
   .analyze-btn .btn-text { display: none; }
 }
 
+/* Prediction Table */
+.prediction-table-wrapper {
+  margin: 16px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.prediction-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.prediction-table th {
+  text-align: left;
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.prediction-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  vertical-align: middle;
+}
+
+.prediction-table .cat-label {
+  color: #e2e8f0;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.prediction-table .price-val, 
+.prediction-table .range-val {
+  font-family: 'JetBrains Mono', monospace;
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.prediction-table .note-val,
+.prediction-table .vol-val {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.prediction-table .sl-row {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.prediction-table .sep-row td {
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: none;
+}
+
+/* Fibonacci Compact */
+.fib-footer {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 8px;
+}
+
+.fib-title {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.fib-levels.compact {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.fib-levels.compact .fib-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.fib-levels.compact .fib-name {
+  font-size: 10px;
+  color: #475569;
+}
+
+.fib-levels.compact .fib-val {
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #cbd5e1;
+}
+
+/* Mini Proj Visual */
+.mini-proj-visual {
+  margin-top: 12px;
+  padding: 0 16px;
+}
+
+.mini-proj-visual .proj-label {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
 /* 7-Factor Styles */
 .factor-bar-wrapper {
   margin-bottom: 12px;

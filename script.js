@@ -436,11 +436,8 @@ async function fetchFundamentalData(symbol) {
 }
 
 // ===== NEWS & SENTIMENT ENGINE =====
-
 async function fetchNews(symbol) {
-  // Use query2 for news search as well
-  const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}&newsCount=5`;
-  
+  const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}&newsCount=8`;
   try {
     const res = await fetchWithProxy(url);
     const json = await res.json();
@@ -454,7 +451,13 @@ async function fetchNews(symbol) {
 function analyzeSentiment(news) {
   const bullishWords = ['營收', '新高', '成長', '突破', '利多', '優於預期', '上調', '合作', '擴建', '進步', '強勁', '買進', '漲', '獲利'];
   const bearishWords = ['下滑', '利空', '衰退', '跌', '低於預期', '下調', '裁員', '亏損', '壓力', '警訊', '賣出', '縮減', '延期', '風險'];
-  
+  const catKeywords = {
+    '財報營收': ['財報', '營收', '獲利', '盈譽', 'eps', '毛利'],
+    '重大訊息': ['重大', '公告', '重訊', '合併', '收購', '違約', '停牌'],
+    '市場分析': ['分析', '展望', '目標價', '評等', '升評', '降評', '外資'],
+    '產品技術': ['新產品', '發表', '技術', '研發', '專利', '量產']
+  };
+
   let sumScore = 0;
   let totalKeywords = 0;
   let hasBullNews = false;
@@ -464,40 +467,45 @@ function analyzeSentiment(news) {
     let itemScore = 0;
     let wordCount = 0;
     const title = item.title || '';
+    const text = title.toLowerCase();
     
     bullishWords.forEach(w => { 
-      if (title.includes(w)) { itemScore += 1; wordCount += 1; hasBullNews = true; } 
+      if (text.includes(w)) { itemScore += 1; wordCount += 1; hasBullNews = true; } 
     });
     bearishWords.forEach(w => { 
-      if (title.includes(w)) { itemScore -= 1; wordCount += 1; hasBearNews = true; } 
+      if (text.includes(w)) { itemScore -= 1; wordCount += 1; hasBearNews = true; } 
     });
     
     sumScore += itemScore;
     totalKeywords += wordCount;
-    
+
+    let category = '一般新聞';
+    for (const [cat, keywords] of Object.entries(catKeywords)) {
+      if (keywords.some(k => text.includes(k))) {
+        category = cat;
+        break;
+      }
+    }
+
     return {
       title,
       link: item.link,
       publisher: item.publisher,
-      sentiment: itemScore > 0 ? 'bull' : itemScore < 0 ? 'bear' : 'neut'
+      sentiment: itemScore > 0 ? 'bullish' : itemScore < 0 ? 'bearish' : 'neutral',
+      category
     };
   });
   
-  // 1. Tone Sum (情緒總和)
-  const score = Math.max(-10, Math.min(10, sumScore * 2));
-  
-  // 2. Tone Intensity (語氣強度) - 平均每則新聞含有的極端詞數量
   const n = Math.max(1, news.length);
+  const score = Math.max(-10, Math.min(10, sumScore * 2));
   const intensity = (totalKeywords / n); 
-  
-  // 3. Tone Volatility (情緒分歧度) - 是否同時充斥多空消息
   const volatility = (hasBullNews && hasBearNews) ? 1 : 0;
 
   return {
     score,
     intensity,
     volatility,
-    news: analyzedNews.slice(0, 5)
+    news: analyzedNews.slice(0, 8)
   };
 }
 
@@ -626,7 +634,7 @@ function detectCandlePatterns(opens, closes, highs, lows) {
 }
 
 // ===== PREDICTION ENGINE =====
-function predict(data, endIndex = -1) {
+function predict(data, endIndex = -1, customWeights = null) {
   const { closes: allCloses, highs: allHighs, lows: allLows, opens: allOpens, volumes: allVolumes } = data;
   const nFull = allCloses.length;
   const L = endIndex === -1 ? nFull - 1 : endIndex;
@@ -786,7 +794,7 @@ function predict(data, endIndex = -1) {
 
   // --- 動態集成融合 (Dynamic Ensemble Weighting) ---
   // Default equal-ish baseline from fundamental analysis
-  const baseWeights = { mom: 0.15, val: 0.15, qual: 0.15, gro: 0.15, vol: 0.10, sent: 0.15, mac: 0.15 };
+  const baseWeights = customWeights || { mom: 0.15, val: 0.15, qual: 0.15, gro: 0.15, vol: 0.10, sent: 0.15, mac: 0.15 };
   let totalWeight = 0;
   let weightedSum = 0;
   
@@ -1177,7 +1185,7 @@ function setMARow(valId, sigId, maVal, price) {
 function updateLoadingStatus(text) { if (loadingStatus) loadingStatus.textContent = text; }
 
 // ===== APPLY RESULTS =====
-function applyResults(data, prediction) {
+function applyResults(data, prediction, personalityName = '', calibrationAccuracy) {
   // Stock info bar
   document.getElementById('stockName').textContent = data.name;
   document.getElementById('stockSymbolTag').textContent = data.symbol;
@@ -1197,6 +1205,18 @@ function applyResults(data, prediction) {
   verdictEl.textContent = prediction.verdict;
   verdictEl.className = 'prediction-verdict ' + prediction.verdictClass;
   document.getElementById('predictionDesc').textContent = prediction.desc;
+  
+  const personalityEl = document.getElementById('predPersonality');
+  if (personalityEl) {
+    personalityEl.textContent = personalityName || 'AI 校準模式';
+    personalityEl.className = 'pred-personality ' + prediction.sentiment;
+  }
+
+  const calValue = document.getElementById('calibrationValue');
+  if (calValue && calibrationAccuracy !== undefined) {
+    const acc = Math.min(99.9, Math.max(0, calibrationAccuracy * 10)); // Scale to %
+    calValue.textContent = acc.toFixed(1) + '%';
+  }
   const confidenceValue = document.getElementById('confidenceValue');
   const confBar = document.getElementById('confidenceBar');
   confBar.style.width = `${prediction.confidence}%`;
@@ -1362,7 +1382,10 @@ function renderNews(newsData) {
     el.target = '_blank';
     el.className = 'news-item';
     el.innerHTML = `
-      <div class="news-item-title">${item.title}</div>
+      <div class="news-item-content">
+        <div class="news-category-tag ${getCategoryClass(item.category)}">${item.category}</div>
+        <div class="news-item-title">${item.title}</div>
+      </div>
       <div class="news-item-meta">
         <span class="news-item-pub">${item.publisher}</span>
         <div class="news-sentiment-dot ${item.sentiment}"></div>
@@ -1377,27 +1400,63 @@ function renderNews(newsData) {
   desc.textContent = s > 2 ? '近期消息面普遍看好，投資人信心積極。' : s < -2 ? '消息面充斥利空訊息，宜謹慎觀察賣盤壓力。' : '消息面情緒穩定，多空交戰均衡。';
 }
 
+function getCategoryClass(cat) {
+  const map = { '財報營收': 'cat-fin', '重大訊息': 'cat-major', '市場分析': 'cat-market', '產品技術': 'cat-tech' };
+  return map[cat] || 'cat-gen';
+}
+
 function renderPriceTargets(targets, fib, currentPrice, currency, sentiment) {
   const badge = document.getElementById('ptSentimentBadge');
   badge.textContent = sentiment === 'bullish' ? '看漲環境' : sentiment === 'bearish' ? '看跌環境' : '盤整環境';
   badge.className = 'pt-badge ' + sentiment;
 
-  const tpLevels = document.getElementById('tpLevels');
-  tpLevels.innerHTML = `
-    <div class="tp-item">
-      <span class="tp-dot"></span>
-      <span class="tp-name">首要獲利 (TP1)</span>
-      <span class="tp-val">${fmtPrice(targets.tp1, currency)}</span>
-    </div>
-    <div class="tp-item">
-      <span class="tp-dot"></span>
-      <span class="tp-name">延伸獲利 (TP2)</span>
-      <span class="tp-val">${fmtPrice(targets.tp2, currency)}</span>
-    </div>
-  `;
+  // New Table IDs
+  document.getElementById('tp1-val').textContent = fmtPrice(targets.tp1, currency);
+  document.getElementById('tp2-val').textContent = fmtPrice(targets.tp2, currency);
+  document.getElementById('sl-val').textContent = fmtPrice(targets.sl, currency);
+  
+  const slNote = document.getElementById('sl-note');
+  slNote.textContent = targets.sl < currentPrice ? '下行風險防線' : '上行壓力警示';
 
-  document.getElementById('slPrice').textContent = fmtPrice(targets.sl, currency);
-  document.getElementById('slDesc').textContent = targets.sl < currentPrice ? '下行風險防線' : '上行壓力警示';
+  // Calculate Risk/Reward Ratio
+  const reward = Math.abs(targets.tp1 - currentPrice);
+  const risk = Math.abs(currentPrice - targets.sl);
+  const rr = risk > 0 ? (reward / risk).toFixed(2) : '--';
+  const rrBadge = document.getElementById('riskRewardBadge');
+  rrBadge.textContent = `R/R: ${rr}`;
+  rrBadge.className = 'risk-reward-badge ' + (rr > 2 ? 'good' : rr > 1 ? 'ok' : 'poor');
+
+  // PL Calculator Logic
+  const costInput = document.getElementById('costBasisInput');
+  const plCalc = document.getElementById('plCalculator');
+  
+  const updatePL = () => {
+    const cost = parseFloat(costInput.value);
+    if (isNaN(cost) || cost <= 0) {
+      plCalc.classList.add('hidden');
+      return;
+    }
+    plCalc.classList.remove('hidden');
+    
+    const curPct = ((currentPrice - cost) / cost) * 100;
+    const tp1Pct = ((targets.tp1 - cost) / cost) * 100;
+    const slPct = ((targets.sl - cost) / cost) * 100;
+
+    const curEl = document.getElementById('currentPL');
+    curEl.textContent = `${curPct > 0 ? '+' : ''}${curPct.toFixed(2)}%`;
+    curEl.className = 'pl-value ' + (curPct > 0 ? 'up' : 'down');
+
+    const t1El = document.getElementById('tp1PL');
+    t1El.textContent = `${tp1Pct > 0 ? '+' : ''}${tp1Pct.toFixed(2)}%`;
+    t1El.className = 'm-value ' + (tp1Pct > 0 ? 'up' : 'down');
+
+    const slEl = document.getElementById('slPL');
+    slEl.textContent = `${slPct > 0 ? '+' : ''}${slPct.toFixed(2)}%`;
+    slEl.className = 'm-value ' + (slPct > 0 ? 'up' : 'down');
+  };
+
+  costInput.oninput = updatePL;
+  updatePL(); // Initial reset
 
   const fibBox = document.getElementById('fibLevels');
   fibBox.innerHTML = '';
@@ -1726,8 +1785,10 @@ function renderTimeProjections(projs, currentPrice, currency) {
     rangeEl.textContent = `${fmtPrice(low, currency)} - ${fmtPrice(high, currency)}`;
     
     // Bar visualization: current price position in the range
-    const pct = ((currentPrice - low) / (high - low)) * 100;
-    barEl.style.left = `${Math.max(0, Math.min(100, pct))}%`;
+    if (barEl) {
+      const pct = ((currentPrice - low) / (high - low)) * 100;
+      barEl.style.left = `${Math.max(0, Math.min(100, pct))}%`;
+    }
 
     const totalMove = ((high / currentPrice) - 1) * 100;
     scenarioEl.textContent = `預估波幅: ±${totalMove.toFixed(1)}%`;
@@ -1782,6 +1843,102 @@ function renderBacktest(res) {
   `;
 }
 
+// ===== AUTO-OPTIMIZER (SELF-LEARNING & ITERATIVE CORRECTION) =====
+function optimizeWeights(data) {
+  // 基礎策略池 (Base Strategy Pool)
+  const baselines = [
+    { name: '技術動能型', weights: { mom: 0.35, val: 0.05, qual: 0.05, gro: 0.05, vol: 0.15, sent: 0.25, mac: 0.10 } },
+    { name: '基本面價值型', weights: { mom: 0.05, val: 0.30, qual: 0.25, gro: 0.20, vol: 0.05, sent: 0.05, mac: 0.10 } },
+    { name: '市場情緒平衡型', weights: { mom: 0.15, val: 0.15, qual: 0.15, gro: 0.15, vol: 0.10, sent: 0.15, mac: 0.15 } },
+    { name: '反轉博弈型', weights: { mom: 0.10, val: 0.20, qual: 0.10, gro: 0.10, vol: 0.20, sent: 0.20, mac: 0.10 } }
+  ];
+  
+  const n = data.closes.length;
+  if (n < 30) return { weights: baselines[2].weights, name: '初露頭角' };
+
+  // 第一階段：基礎校準 (Initial Calibration)
+  let bestWeights = null;
+  let bestScore = -9999;
+  let bestName = '';
+
+  const lookback = Math.min(60, n - 20); // Increase lookback
+  const hold = 5;
+
+  baselines.forEach(cfg => {
+    const error = calculatePredictionError(data, cfg.weights, lookback, hold);
+    if (error.fitness > bestScore) {
+      bestScore = error.fitness;
+      bestWeights = { ...cfg.weights };
+      bestName = cfg.name;
+    }
+  });
+
+  // 第二階段：深度尋優 (Deep Parameter Sweep)
+  // 增加迭代次數 (8 -> 25)
+  for (let it = 0; it < 25; it++) {
+    const candidateWeights = { ...bestWeights };
+    const factors = Object.keys(candidateWeights);
+    const f1 = factors[Math.floor(Math.random() * factors.length)];
+    const f2 = factors[Math.floor(Math.random() * factors.length)];
+    
+    // 能量守恆擾動 (Energy-Conserving Perturbation)
+    const nudge = 0.04; // Slightly smaller steps for stability
+    if (candidateWeights[f1] > 0.08) {
+      candidateWeights[f1] -= nudge;
+      candidateWeights[f2] += nudge;
+      
+      const { fitness } = calculatePredictionError(data, candidateWeights, lookback, hold);
+      if (fitness > bestScore) {
+        bestScore = fitness;
+        bestWeights = candidateWeights;
+      }
+    }
+  }
+
+  // 判定當前市場屬性 (Market Regime Detection)
+  let finalName = bestName;
+  const volRank = (data.closes[n-1] - data.closes[n-10]) / data.closes[n-10];
+  if (Math.abs(volRank) > 0.12) finalName = '極端波動優化模式';
+  else if (bestWeights.val > 0.25) finalName = '深度價值錨定型';
+  else if (bestWeights.mom > 0.3) finalName = '強勢趨勢追蹤型';
+  else if (bestWeights.sent > 0.25) finalName = '市場情緒主導型';
+
+  console.log(`[AI Optimizer] 校正完畢。適配度: ${(bestScore * 10).toFixed(1)}% | 採用策略: ${finalName}`);
+  return { weights: bestWeights, name: finalName, fitness: bestScore };
+}
+
+// 輔助函式：計算特定權重組合在歷史資料中的「適配度 (Fitness)」
+function calculatePredictionError(data, weights, lookback, hold) {
+  let fitness = 0;
+  const n = data.closes.length;
+  
+  for (let i = n - lookback - hold; i < n - hold; i++) {
+    const p = predict(data, i, weights);
+    const actualMove = (data.closes[i + hold] - data.closes[i]) / data.closes[i];
+    
+    // 預測得分與實際漲幅的關聯性評估
+    const predDirection = (p.score - 50) / 50; // -1 to 1
+    const actualDirection = actualMove * 12; // Adjusted sensitivity
+    
+    // 點積適配度 (Dot-product fitness): 加強方向一致性的獎勵，加大方向錯誤的懲罰
+    const match = predDirection * actualDirection;
+    if (match > 0) {
+      fitness += match * 2.5; // Reward correct direction
+    } else {
+      fitness += match * 6.0; // Penalty for wrong direction
+    }
+    
+    // 懲罰「極端誤判」(False Positive/Negative)
+    if (p.score > 75 && actualMove < -0.015) fitness -= 15;
+    if (p.score < 25 && actualMove > 0.015) fitness -= 15;
+    
+    // 獎勵「準確命中趨勢」
+    if (p.score > 80 && actualMove > 0.03) fitness += 10;
+    if (p.score < 20 && actualMove < -0.03) fitness += 10;
+  }
+  return { fitness: fitness / lookback };
+}
+
 // ===== MAIN ANALYSIS =====
 async function runAnalysis() {
   const raw = stockInput.value.trim();
@@ -1808,10 +1965,13 @@ async function runAnalysis() {
 
     updateLoadingStatus('識別 K 線型態...');
     await new Promise(r => setTimeout(r, 200));
+    updateLoadingStatus('校正 AI 權重環境...');
+    const optimization = optimizeWeights(data);
+    const optimizedWeights = optimization.weights;
+    const personalityName = optimization.name;
+    
     updateLoadingStatus('計算評分中...');
-    await new Promise(r => setTimeout(r, 200));
-
-    const prediction = predict(data);
+    const prediction = predict(data, -1, optimizedWeights);
     loadingSection.classList.add('hidden');  // Final UI Reveal
     resultsSection.classList.remove('hidden');
     resultsSection.scrollIntoView({ behavior: 'smooth' });
@@ -1826,7 +1986,7 @@ async function runAnalysis() {
     renderInstitutionalData(data);
     
     updateStarBtn(data.symbol);
-    applyResults(data, prediction);
+    applyResults(data, prediction, personalityName, optimization.fitness);
     
     // Perform Backtest after main results
     const btResults = runBacktest(data);

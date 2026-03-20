@@ -110,6 +110,7 @@
         <div class="prediction-header">
           <div class="pred-icon" id="predIcon">—</div>
           <div class="pred-label">AI 預測訊號</div>
+          <div class="pred-personality" id="predPersonality"></div>
         </div>
         <div class="prediction-verdict" id="predictionVerdict">—</div>
         <div class="prediction-desc" id="predictionDesc">—</div>
@@ -119,6 +120,10 @@
             <div class="confidence-bar-fill" id="confidenceBar"></div>
           </div>
           <span class="conf-value" id="confidenceValue">—%</span>
+        </div>
+        <div class="calibration-row">
+          <span class="cal-label">AI 環境校正準度 (MSE Match)</span>
+          <span class="cal-value" id="calibrationValue">--%</span>
         </div>
         <div id="backtestStats" class="backtest-stats hidden">
           <!-- Backtest results injected here -->
@@ -152,62 +157,91 @@
         <div class="pt-header">
           <div class="pt-title-group">
             <h3 class="pt-title">🎯 價格目標 &amp; 時間預估</h3>
-            <p class="pt-subtitle">基於 ATR 波動率、費波那契延伸、趨勢強度計算，僅供參考</p>
+            <div class="risk-reward-badge" id="riskRewardBadge">R/R: --</div>
+          </div>
+          <div class="cost-input-group">
+            <input type="number" id="costBasisInput" placeholder="持有成本..." class="cost-input">
           </div>
           <div class="pt-badge" id="ptSentimentBadge">—</div>
         </div>
 
-        <!-- Take Profit & Stop Loss -->
-        <div class="tp-sl-row">
-          <div class="tp-block">
-            <div class="tp-label">🟢 目標獲利價位</div>
-            <div class="tp-levels" id="tpLevels"></div>
+        <div id="plCalculator" class="pl-calculator hidden">
+          <div class="pl-row">
+            <span class="pl-label">當前獲利預估</span>
+            <span class="pl-value" id="currentPL">—</span>
           </div>
-          <div class="divider-v"></div>
-          <div class="sl-block">
-            <div class="sl-label">🔴 止損參考價位</div>
-            <div class="sl-price" id="slPrice">—</div>
-            <div class="sl-desc" id="slDesc">—</div>
+          <div class="pl-grid">
+            <div class="pl-mini-item">
+              <span class="m-label">達標 TP1 獲利</span>
+              <span class="m-value" id="tp1PL">—</span>
+            </div>
+            <div class="pl-mini-item">
+              <span class="m-label">觸碰 SL 損失</span>
+              <span class="m-value" id="slPL">—</span>
+            </div>
           </div>
         </div>
 
-        <!-- Time Projections -->
-        <div class="time-proj-title">📅 時間區間預估</div>
-        <div class="time-proj-grid">
-          <div class="time-proj-item" id="proj-1m">
-            <div class="proj-period">近 1 個月</div>
-            <div class="proj-range" id="range-1m">—</div>
-            <div class="proj-bar-wrap">
-              <div class="proj-bar-track">
-                <div class="proj-bar-current" id="bar-1m"></div>
-              </div>
+        <!-- Unified Targets & Projections Table -->
+        <div class="prediction-table-wrapper">
+          <table class="prediction-table">
+            <thead>
+              <tr>
+                <th>類別</th>
+                <th>目標 / 區間</th>
+                <th>備註 / 波幅</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="cat-label">🟢 首要獲利 (TP1)</td>
+                <td class="price-val" id="tp1-val">—</td>
+                <td class="note-val" id="tp1-note">主要目標</td>
+              </tr>
+              <tr>
+                <td class="cat-label">🟢 延伸獲利 (TP2)</td>
+                <td class="price-val" id="tp2-val">—</td>
+                <td class="note-val" id="tp2-note">長期目標</td>
+              </tr>
+              <tr class="sl-row">
+                <td class="cat-label">🔴 止損參考 (SL)</td>
+                <td class="price-val" id="sl-val">—</td>
+                <td class="note-val" id="sl-note">風險防線</td>
+              </tr>
+              <tr class="sep-row"><td colspan="3"></td></tr>
+              <tr>
+                <td class="cat-label">📅 近 1 個月預估</td>
+                <td class="range-val" id="range-1m">—</td>
+                <td class="vol-val" id="scenario-1m">—</td>
+              </tr>
+              <tr>
+                <td class="cat-label">📅 近 6 個月預估</td>
+                <td class="range-val" id="range-6m">—</td>
+                <td class="vol-val" id="scenario-6m">—</td>
+              </tr>
+              <tr>
+                <td class="cat-label">📅 近 1 年預估</td>
+                <td class="range-val" id="range-1y">—</td>
+                <td class="vol-val" id="scenario-1y">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Progress Bar for 1m (Keep for visual) -->
+        <div class="mini-proj-visual">
+          <div class="proj-label">短期 (1m) 相對當前價位</div>
+          <div class="proj-bar-wrap">
+            <div class="proj-bar-track">
+              <div class="proj-bar-current" id="bar-1m"></div>
             </div>
-            <div class="proj-scenario" id="scenario-1m">—</div>
-          </div>
-          <div class="time-proj-item" id="proj-6m">
-            <div class="proj-period">近 6 個月</div>
-            <div class="proj-range" id="range-6m">—</div>
-            <div class="proj-bar-wrap">
-              <div class="proj-bar-track">
-                <div class="proj-bar-current" id="bar-6m"></div>
-              </div>
-            </div>
-            <div class="proj-scenario" id="scenario-6m">—</div>
-          </div>
-          <div class="time-proj-item" id="proj-1y">
-            <div class="proj-period">近 1 年</div>
-            <div class="proj-range" id="range-1y">—</div>
-            <div class="proj-bar-wrap">
-              <div class="proj-bar-track">
-                <div class="proj-bar-current" id="bar-1y"></div>
-              </div>
-            </div>
-            <div class="proj-scenario" id="scenario-1y">—</div>
           </div>
         </div>
 
-        <!-- Fibonacci Levels -->
-          <div class="fib-levels" id="fibLevels"></div>
+        <!-- Fibonacci Levels (Compact) -->
+        <div class="fib-footer">
+          <span class="fib-title">Fibonacci 回徹:</span>
+          <div class="fib-levels compact" id="fibLevels"></div>
         </div>
       </div>
 
