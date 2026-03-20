@@ -890,11 +890,19 @@ function predict(data, endIndex = -1) {
   };
 
   // Time projections based on ATR and log volatility (with mean reversion decay)
-  const dailyVol = atr / currentPrice;
-  const projectRange = (days) => {
-    // 預期時間越長，極端波動被抵消的機率越高中和化，使用衰減常數
-    const timeDecay = Math.max(0.6, 1.2 - (days / 400));
-    const std = dailyVol * Math.sqrt(days) * timeDecay;
+  // Ensure we adapt the 'days' / 'periods' multiplier based on the chart's current interval.
+  const volRatio = atr / currentPrice;
+
+  let p1m = 20, p6m = 120, p1y = 240;
+  if (typeof currentInterval !== 'undefined') {
+    if (currentInterval === '1wk') { p1m = 4; p6m = 26; p1y = 52; }
+    else if (currentInterval === '1mo') { p1m = 1; p6m = 6; p1y = 12; }
+  }
+
+  const projectRange = (periods, months) => {
+    // 預期時間越長，極端波動被抵消的機率越高中和化，使用依月份的衰減常數
+    const timeDecay = Math.max(0.5, 1.1 - (months / 12) * 0.4);
+    const std = volRatio * Math.sqrt(periods) * timeDecay;
     return {
       low: currentPrice * (1 - std),
       high: currentPrice * (1 + std)
@@ -910,7 +918,7 @@ function predict(data, endIndex = -1) {
     backtest,
     twSpec,
     fib,
-    projections: { '1m': projectRange(20), '6m': projectRange(120), '1y': projectRange(240) },
+    projections: { '1m': projectRange(p1m, 1), '6m': projectRange(p6m, 6), '1y': projectRange(p1y, 12) },
     targets: { tp1, tp2, sl },
     factorScores,
     indicators: {
