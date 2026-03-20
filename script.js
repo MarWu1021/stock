@@ -453,16 +453,28 @@ async function fetchNews(symbol) {
 
 function analyzeSentiment(news) {
   const bullishWords = ['營收', '新高', '成長', '突破', '利多', '優於預期', '上調', '合作', '擴建', '進步', '強勁', '買進', '漲', '獲利'];
-  const bearishWords = ['下滑', '利空', '衰退', '跌', '低於預期', '下調', '裁員', '虧損', '壓力', '警訊', '賣出', '縮減', '延期', '風險'];
+  const bearishWords = ['下滑', '利空', '衰退', '跌', '低於預期', '下調', '裁員', '亏損', '壓力', '警訊', '賣出', '縮減', '延期', '風險'];
   
-  let score = 0;
+  let sumScore = 0;
+  let totalKeywords = 0;
+  let hasBullNews = false;
+  let hasBearNews = false;
+
   const analyzedNews = news.map(item => {
     let itemScore = 0;
+    let wordCount = 0;
     const title = item.title || '';
-    bullishWords.forEach(w => { if (title.includes(w)) itemScore += 1; });
-    bearishWords.forEach(w => { if (title.includes(w)) itemScore -= 1; });
     
-    score += itemScore;
+    bullishWords.forEach(w => { 
+      if (title.includes(w)) { itemScore += 1; wordCount += 1; hasBullNews = true; } 
+    });
+    bearishWords.forEach(w => { 
+      if (title.includes(w)) { itemScore -= 1; wordCount += 1; hasBearNews = true; } 
+    });
+    
+    sumScore += itemScore;
+    totalKeywords += wordCount;
+    
     return {
       title,
       link: item.link,
@@ -471,10 +483,32 @@ function analyzeSentiment(news) {
     };
   });
   
+  // 1. Tone Sum (情緒總和)
+  const score = Math.max(-10, Math.min(10, sumScore * 2));
+  
+  // 2. Tone Intensity (語氣強度) - 平均每則新聞含有的極端詞數量
+  const n = Math.max(1, news.length);
+  const intensity = (totalKeywords / n); 
+  
+  // 3. Tone Volatility (情緒分歧度) - 是否同時充斥多空消息
+  const volatility = (hasBullNews && hasBearNews) ? 1 : 0;
+
   return {
-    score: Math.max(-10, Math.min(10, score * 2)), // Scale to -10 ~ 10
+    score,
+    intensity,
+    volatility,
     news: analyzedNews.slice(0, 5)
   };
+}
+
+// ===== HELPER: PRICE DENOISING (數值平滑去噪) =====
+function smoothSeries(arr, alpha = 0.35) {
+  if (arr.length === 0) return [];
+  const res = [arr[0]];
+  for (let i = 1; i < arr.length; i++) {
+    res.push(alpha * arr[i] + (1 - alpha) * res[i - 1]);
+  }
+  return res;
 }
 
 // ===== K-LINE (CANDLESTICK) PATTERN RECOGNITION =====
@@ -608,10 +642,16 @@ function predict(data, endIndex = -1) {
 
   updateLoadingStatus('計算技術指標中...');
 
-  const rsiVal = calcRSI(closes);
+  const atr = calcATR(highs, lows, closes);
+  
+  // --- 數值資訊去噪 (Numerical Denoising) ---
+  // 利用指數平滑過濾短期雜訊（如假跌破），供對雜訊敏感的指標（MACD, RSI, BB）使用
+  const smoothedCloses = smoothSeries(closes, 0.4);
+
+  const rsiVal = calcRSI(smoothedCloses);
   let rsiScore = rsiVal < 30 ? 2 : rsiVal < 40 ? 1 : rsiVal > 70 ? -2 : rsiVal > 60 ? -1 : 0;
 
-  const macdData = calcMACD(closes);
+  const macdData = calcMACD(smoothedCloses);
   let macdScore = 0;
   if (macdData.current > macdData.currentSignal) macdScore += 1;
   if (macdData.currentHistogram > 0 && macdData.currentHistogram > macdData.prevHistogram) macdScore += 1;
@@ -630,7 +670,7 @@ function predict(data, endIndex = -1) {
   if (curMa60 && currentPrice > curMa60) maScore += 1; else maScore -= 1;
   if (curMa5 > curMa20) maScore += 0.5;
 
-  const bb = calcBB(closes);
+  const bb = calcBB(smoothedCloses);
   const bbPos = (currentPrice - bb.lower) / (bb.upper - bb.lower);
   let bbScore = currentPrice < bb.lower ? 2 : bbPos < 0.25 ? 1 : currentPrice > bb.upper ? -2 : bbPos > 0.75 ? -1 : 0;
 
@@ -706,7 +746,6 @@ function predict(data, endIndex = -1) {
   if (epsGrowth) { if (epsGrowth > 0.2) scoreGro += 25; else if (epsGrowth < -0.1) scoreGro -= 30; }
   scoreGro = Math.max(0, Math.min(100, scoreGro));
 
-  const atr = calcATR(highs, lows, closes);
   // 5. Volatility (波動性) 10%
   let scoreVol = 50;
   const beta = safeVal(ks, 'beta');
@@ -715,14 +754,23 @@ function predict(data, endIndex = -1) {
   if (atrRatio) { if (atrRatio < 0.02) scoreVol += 15; else if (atrRatio > 0.04) scoreVol -= 15; }
   scoreVol = Math.max(0, Math.min(100, scoreVol));
 
-  const newsSentiment = data.newsSentiment || { score: 0, news: [] };
+  const newsSentiment = data.newsSentiment || { score: 0, intensity: 0, volatility: 0, news: [] };
   // 6. Sentiment (情緒) 10%
   let scoreSent = 50;
   const targetMean = safeVal(fd, 'targetMeanPrice');
   const recMean = safeVal(fd, 'recommendationMean');
   if (targetMean) { if (targetMean > currentPrice * 1.15) scoreSent += 25; else if (targetMean < currentPrice) scoreSent -= 20; }
   if (recMean) { if (recMean < 1.8) scoreSent += 20; else if (recMean > 3.2) scoreSent -= 20; }
-  if (newsSentiment.score > 3) scoreSent += 15; else if (newsSentiment.score < -3) scoreSent -= 15;
+  
+  // 引入強度與波動特徵
+  if (newsSentiment.score > 3) scoreSent += 15 + (newsSentiment.intensity * 5); 
+  else if (newsSentiment.score < -3) scoreSent -= 15 + (newsSentiment.intensity * 5);
+  
+  // 情緒分歧度會收斂極端訊號
+  if (newsSentiment.volatility > 0) {
+    scoreSent = 50 + (scoreSent - 50) * 0.5; // pull back towards neutral
+  }
+  
   scoreSent = Math.max(0, Math.min(100, scoreSent));
 
   // 7. Macro (宏觀) 10%
@@ -736,16 +784,33 @@ function predict(data, endIndex = -1) {
 
   const factorScores = { mom: scoreMom, val: scoreVal, qual: scoreQual, gro: scoreGro, vol: scoreVol, sent: scoreSent, mac: scoreMac };
 
-  // Dynamic Weighting & Final Score Calculation
-  const baseWeights = { mom: 0.15, val: 0.15, qual: 0.20, gro: 0.20, vol: 0.10, sent: 0.10, mac: 0.10 };
+  // --- 動態集成融合 (Dynamic Ensemble Weighting) ---
+  // Default equal-ish baseline from fundamental analysis
+  const baseWeights = { mom: 0.15, val: 0.15, qual: 0.15, gro: 0.15, vol: 0.10, sent: 0.15, mac: 0.15 };
   let totalWeight = 0;
   let weightedSum = 0;
   
+  // Determine market context rules
+  const isHighVol = atrRatio > 0.035; // 高波動市況
+  const hasStrongNews = newsSentiment.intensity > 1.0; // 消息影響強烈
+  const hasDivergentNews = newsSentiment.volatility > 0; // 消息分歧（多空交戰）
+  
   Object.keys(baseWeights).forEach(k => {
     let w = baseWeights[k];
+    
+    // Apply Ensemble adjustments based on multimodal context
+    if (k === 'sent' && (isHighVol || hasStrongNews)) {
+       w *= 1.8; // Sentiment drives volatile/catalyst markets
+    } else if ((k === 'val' || k === 'qual' || k === 'gro') && isHighVol) {
+       w *= 0.6; // Basic fundamentals matter less during panic/euphoria stretches
+    } else if (k === 'mom' && hasDivergentNews) {
+       w *= 0.7; // Technical breakouts less reliable if news consensus is split
+    }
+    
     const s = factorScores[k];
-    // Extreme factor boost: if score is very high or very low, increase its impact
-    if (s > 80 || s < 20) w *= 1.8;
+    // Keep extreme factor boost (non-linear impact)
+    if (s > 80 || s < 20) w *= 1.6;
+    
     weightedSum += s * w;
     totalWeight += w;
   });
