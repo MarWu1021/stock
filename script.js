@@ -889,24 +889,39 @@ function predict(data, endIndex = -1) {
     gap: (lows[n-1] > highs[n-2] * 1.005) ? 'up' : (highs[n-1] < lows[n-2] * 0.995) ? 'dn' : 'none'
   };
 
-  // Time projections based on ATR and log volatility (with mean reversion decay)
-  // Ensure we adapt the 'days' / 'periods' multiplier based on the chart's current interval.
-  const volRatio = atr / currentPrice;
+  // --- 股價合理解析區間 (Realistic Price Projections) ---
+  // 不再單純使用隨機漫步發散，而是引入基本面錨點 (Wall Street Analyst Targets) 與極限均值回歸
+  const fundData = data.fundamentals?.financialData || {};
+  const tHigh = safeVal(fundData, 'targetHighPrice') || (currentPrice * 1.35);
+  const tLow  = safeVal(fundData, 'targetLowPrice') || (currentPrice * 0.75);
+  const tMean = safeVal(fundData, 'targetMeanPrice') || currentPrice;
 
-  let p1m = 20, p6m = 120, p1y = 240;
+  // 避免極端時間週期的 ATR 暴走，我們建立一個基礎的「月度預估波動率」
+  // 假設日常波幅基準約為 5%~10%
+  let baseVol = 0.08; 
   if (typeof currentInterval !== 'undefined') {
-    if (currentInterval === '1wk') { p1m = 4; p6m = 26; p1y = 52; }
-    else if (currentInterval === '1mo') { p1m = 1; p6m = 6; p1y = 12; }
+    if (currentInterval === '1d') baseVol = (atr / currentPrice) * 4.5;
+    else if (currentInterval === '1wk') baseVol = (atr / currentPrice) * 2;
+    else if (currentInterval === '1mo') baseVol = (atr / currentPrice);
   }
+  baseVol = Math.max(0.04, Math.min(0.18, baseVol)); // 限制在合理範圍內 (4% - 18%)
 
-  const projectRange = (periods, months) => {
-    // 預期時間越長，極端波動被抵消的機率越高中和化，使用依月份的衰減常數
-    const timeDecay = Math.max(0.5, 1.1 - (months / 12) * 0.4);
-    const std = volRatio * Math.sqrt(periods) * timeDecay;
-    return {
-      low: currentPrice * (1 - std),
-      high: currentPrice * (1 + std)
-    };
+  const projectRange = (months) => {
+    // 依據時間衰減的波幅
+    const expansion = baseVol * Math.pow(months, 0.65); 
+    let statHigh = currentPrice * (1 + expansion);
+    let statLow  = currentPrice * (1 - expansion);
+
+    // 長期預測 (6m, 1y) 必須向分析師共識靠攏
+    if (months === 6) {
+      statHigh = statHigh * 0.6 + tMean * 0.4;
+      statLow  = statLow * 0.6 + Math.min(tLow, currentPrice * 0.85) * 0.4;
+    } else if (months === 12) {
+      statHigh = statHigh * 0.3 + tHigh * 0.7; // 1年期高度錨定分析師最高價
+      statLow  = statLow * 0.3 + tLow * 0.7;   // 1年期高度錨定分析師最低價
+    }
+
+    return { low: statLow, high: statHigh };
   };
 
   return {
@@ -918,7 +933,7 @@ function predict(data, endIndex = -1) {
     backtest,
     twSpec,
     fib,
-    projections: { '1m': projectRange(p1m, 1), '6m': projectRange(p6m, 6), '1y': projectRange(p1y, 12) },
+    projections: { '1m': projectRange(1), '6m': projectRange(6), '1y': projectRange(12) },
     targets: { tp1, tp2, sl },
     factorScores,
     indicators: {
