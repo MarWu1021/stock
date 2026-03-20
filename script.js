@@ -824,13 +824,15 @@ function predict(data, endIndex = -1) {
     gap: (lows[n-1] > highs[n-2] * 1.005) ? 'up' : (highs[n-1] < lows[n-2] * 0.995) ? 'dn' : 'none'
   };
 
-  // Time projections based on ATR and log volatility
+  // Time projections based on ATR and log volatility (with mean reversion decay)
   const dailyVol = atr / currentPrice;
   const projectRange = (days) => {
-    const std = dailyVol * Math.sqrt(days);
+    // 預期時間越長，極端波動被抵消的機率越高中和化，使用衰減常數
+    const timeDecay = Math.max(0.6, 1.2 - (days / 400));
+    const std = dailyVol * Math.sqrt(days) * timeDecay;
     return {
-      low: currentPrice * (1 - std * 1.5),
-      high: currentPrice * (1 + std * 1.5)
+      low: currentPrice * (1 - std),
+      high: currentPrice * (1 + std)
     };
   };
 
