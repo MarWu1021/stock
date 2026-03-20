@@ -19,7 +19,11 @@ function renderInstitutionalData(data) {
   if (countEl) countEl.textContent = instCount;
   
   if (instPct === '—%') {
-    document.getElementById('desc-institution').textContent = '⚠️ 暫無此標的的機構持股公開數據。';
+    const descEl = document.getElementById('desc-institution');
+    if (descEl) descEl.textContent = '⚠️ 暫無此標的的機構持股公開數據。';
+  } else {
+    const descEl = document.getElementById('desc-institution');
+    if (descEl) descEl.textContent = '高比例的機構持股通常代表較高的股價穩定度。';
   }
 }
 
